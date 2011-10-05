@@ -1,9 +1,10 @@
 #!/usr/bin/python
 
-"""Spike of a VREG REST API using gevent for event-based concurrency.
+"""Entry point to a Nucleon application.
 
-gevent has particularly good performance characteristics according to
-http://nichol.as/benchmark-of-python-web-servers
+This module contains functions for patching gevent and psycopg2, and starting
+the Nucleon server.
+
 """
 
 from gevent.pywsgi import WSGIServer
@@ -19,15 +20,16 @@ def bootstrap_gevent():
     psyco_gevent.make_psycopg_green()
 
 
-def serve():
+def serve(logfile='nucleon.log', port=8888):
     """Start the server. Does not return."""
 
     from .application import app
-    with open('logs/vreg.log', 'w') as f:
-        server = WSGIServer(('0.0.0.0', 8888), app, log=f)
+    with open(logfile, 'w') as f:
+        server = WSGIServer(('0.0.0.0', port), app, log=f)
         server.serve_forever()
 
 
 if __name__ == '__main__':
+    #TODO: fork/daemonize here - or after binding port?
     bootstrap_gevent()
     serve()

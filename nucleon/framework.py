@@ -5,6 +5,8 @@ from webob import exc
 import traceback
 
 
+__all__ = ['Http404', 'JsonResponse', 'JsonErrorResponse', 'Application']
+
 class Http404(Exception):
     """Views can raise this and it will be converted to a JSON 404 error."""
 
@@ -29,6 +31,12 @@ class Application(object):
     def __init__(self):
         self.routes = []
 
+    def view(self, pattern, **vars):
+        def _register(view):
+            self.add_view(pattern, view, **vars)
+            return view
+        return _register
+            
     def add_view(self, pattern, view, **vars):
         self.routes.append((re.compile(pattern), view, vars))
 
