@@ -1,13 +1,22 @@
 from collections import OrderedDict
 
 from . import db
-from vreg.framework import Http404
+from ..framework import Http404
 
 
 __all__ = ['db_select_first', 'db_select_list']
 
 
-def db_select_first(query, params=(), error_not_found='No such object was found in the database.'):
+DEFAULT_ERROR_NOT_FOUND = 'No such object was found in the database.'
+
+
+def db_select_first(query, params=(), error_not_found=DEFAULT_ERROR_NOT_FOUND):
+    """Query the database and return the first row as a dictionary.
+    
+    If no row is returned for the given query, raises Http404, with the message
+    error_not_found.
+    """
+
     with db.cursor() as c:
         c.execute(query, params)
         r = c.fetchone()
@@ -20,6 +29,8 @@ def db_select_first(query, params=(), error_not_found='No such object was found 
 
 
 def db_select_list(query, params=()):
+    """Query the database, returning the results as a list of dictionaries."""
+
     with db.cursor() as c:
         c.execute(query, params)
         keys = tuple([col[0] for col in c.description])
