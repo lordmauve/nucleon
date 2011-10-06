@@ -1,0 +1,7 @@
+#!/usr/bin/env python
+
+"""Command-line interface for nucleon management"""
+
+from nucleon.commands import main
+
+main()
