@@ -36,9 +36,12 @@ class Application(object):
             self.add_view(pattern, view, **vars)
             return view
         return _register
-            
+
     def add_view(self, pattern, view, **vars):
-        self.routes.append((re.compile(pattern), view, vars))
+        self.routes.append((re.compile('^%s$' % pattern), view, vars))
+
+    def configure_database(self, **kwargs):
+        self.db = PostgresConnectionPool(**kwargs)
 
     def __call__(self, environ, start_response):
         req = Request(environ)

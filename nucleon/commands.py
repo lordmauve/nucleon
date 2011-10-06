@@ -6,7 +6,9 @@ bootstrap_gevent()
 def start():
     """Start the app located in the current directory."""
     # Import app from the current directory
-    from app import app
+    from nucleon.loader import get_app
+    from nucleon.main import serve
+    app = get_app()
     serve(app)
 
 

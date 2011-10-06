@@ -14,7 +14,7 @@ def bootstrap_gevent():
     gevent.monkey.patch_all()
 
     # Patch psycopg2 to use gevent coroutines instead of blocking
-    import psyco_gevent
+    from .database import psyco_gevent
     psyco_gevent.make_psycopg_green()
 
 

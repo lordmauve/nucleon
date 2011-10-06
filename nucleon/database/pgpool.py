@@ -13,7 +13,7 @@ class PostgresConnectionPool(object):
     when the context is exited.
     """
 
-    def __init__(self, initial=10, limit=20, **settings):
+    def __init__(self, initial=1, limit=20, **settings):
         self.settings = settings
         self.sem = Semaphore(limit)
         self.size = 0
