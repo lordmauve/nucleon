@@ -4,6 +4,12 @@ import sys
 
 
 def get_app(relpath=None):
+    """Search for an load an application.
+
+    If relpath is given, this is the path to search from (the default is the
+    current working directory.)
+
+    """
     if relpath is None:
         relpath = os.getcwd()
     elif not os.path.isdir(relpath):
