@@ -7,8 +7,6 @@ the Nucleon server.
 
 """
 
-from gevent.pywsgi import WSGIServer
-
 
 def bootstrap_gevent():
     # Patch the standard library to use gevent
@@ -20,10 +18,9 @@ def bootstrap_gevent():
     psyco_gevent.make_psycopg_green()
 
 
-def serve(logfile='nucleon.log', port=8888):
+def serve(app, logfile='nucleon.log', port=8888):
     """Start the server. Does not return."""
-
-    from .application import app
+    from gevent.pywsgi import WSGIServer
     with open(logfile, 'w') as f:
         server = WSGIServer(('0.0.0.0', port), app, log=f)
         server.serve_forever()
