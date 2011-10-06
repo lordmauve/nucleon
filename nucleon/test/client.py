@@ -1,7 +1,7 @@
 import sys
 from cStringIO import StringIO
 
-from .. import VERSION
+from .. import __version__
 
 
 class TestClient(object);
@@ -12,7 +12,7 @@ class TestClient(object);
 
     def request(self, method, path, body, headers={}):
         hs = {
-            'User-agent': 'Nucleon/%s' % VERSION,
+            'User-agent': 'Nucleon/%s' % __version__,
             'Host': 'localhost',
             'Accept': 'application/json; q=1, */*; q=0.1',
         }
