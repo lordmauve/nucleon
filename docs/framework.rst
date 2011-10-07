@@ -2,7 +2,9 @@ Writing REST/JSON Applications
 ==============================
 
 Nucleon makes it easy to write JSON/REST applications with relatively little
-code. The URL routing and view dispatching is modelled closely on Django's.
+code. The URL routing and view dispatching is modelled on Django's, except that
+in Nucleon callables are registered directly with an app rather than being
+automatically loaded from a separate URL configuration module.
 
 Views are simply methods that accept a request object as a parameter and return
 a response. The response is typically a structure consisting of lists, dicts,
