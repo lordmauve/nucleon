@@ -16,12 +16,28 @@ class Application(object):
         self.routes = []
 
     def view(self, pattern, **vars):
+        """Decorator that binds a view function to a URL pattern.
+        
+        This view will only be used to serve GET requests. All other methods
+        will result in a HTTP response of 405 Method Not Allowed.
+        """
         def _register(view):
             self.add_view(pattern, view, **vars)
             return view
         return _register
 
     def add_view(self, pattern, view, **vars):
+        """Bind view functions to a given URL pattern.
+        
+        If view is a callable then this will be served when the request path
+        matches pattern and the method is GET.
+
+        view can also be a dictionary mapping HTTP methods to different view
+        functions.
+
+        Any additional keyword parameters will be passed as keyword parameters
+        when the view is requested.
+        """
         self.routes.append((re.compile('^%s$' % pattern), view, vars))
 
     def configure_database(self, **kwargs):
