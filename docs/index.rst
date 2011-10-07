@@ -13,6 +13,7 @@ Contents:
 
    quickstart
    framework
+   gevent
 
 Indices and tables
 ==================
