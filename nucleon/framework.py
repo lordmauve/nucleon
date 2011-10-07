@@ -1,29 +1,13 @@
 import re
-import json
-from webob import Request, Response
-from webob import exc
 import traceback
 
+from webob import Request, Response
 
-__all__ = ['Http404', 'JsonResponse', 'JsonErrorResponse', 'Application']
-
-class Http404(Exception):
-    """Views can raise this and it will be converted to a JSON 404 error."""
-
-
-class JsonResponse(Response):
-    """A response that converts its body to JSON."""
-    def __init__(self, obj, **kwargs):
-        ps = {
-            'content_type': 'application/json'
-        }
-        ps.update(kwargs)
-        super(JsonResponse, self).__init__(json.dumps(obj), **ps)
+from .database.pgpool import PostgresConnectionPool
+from .http import Http404, JsonResponse 
 
 
-class JsonErrorResponse(JsonResponse):
-    def __init__(self, obj, **kwargs):
-        super(JsonErrorResponse, self).__init__(obj, status=400, **kwargs)
+__all__ = ['Application']
 
 
 class Application(object):
@@ -42,6 +26,7 @@ class Application(object):
 
     def configure_database(self, **kwargs):
         self.db = PostgresConnectionPool(**kwargs)
+        return self.db
 
     def __call__(self, environ, start_response):
         req = Request(environ)
