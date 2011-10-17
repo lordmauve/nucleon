@@ -7,7 +7,11 @@ setup(
     name="nucleon",
     version=__version__,
     packages=['nucleon'],
-    scripts=['scripts/nucleon'],
+    entry_points={
+        'console_scripts': [
+            'nucleon = nucleon.commands:main',
+        ]
+    },
     package_data={
         'nucleon': ['skel/*'],
     },
