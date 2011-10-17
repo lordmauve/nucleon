@@ -1,5 +1,7 @@
 import re
 import traceback
+from ConfigParser import NoOptionError
+
 
 from webob import Request, Response
 
@@ -7,13 +9,21 @@ from .database.pgpool import PostgresConnectionPool
 from .http import Http404, JsonResponse 
 
 
-__all__ = ['Application']
+__all__ = ['Application', 'ConfigurationError']
+
+
+
+class ConfigurationError(Exception):
+    """The application instance was misconfigured."""
 
 
 class Application(object):
     """Connects URLS to views and dispatch requests to them."""
-    def __init__(self):
+    def __init__(self, environment='default'):
+        """Create a blank application configured for the specified environment."""
         self.routes = []
+        self.environment = environment
+        self._dbs = {}
 
     def view(self, pattern, **vars):
         """Decorator that binds a view function to a URL pattern.
@@ -40,9 +50,29 @@ class Application(object):
         """
         self.routes.append((re.compile('^%s$' % pattern), view, vars))
 
-    def configure_database(self, **kwargs):
-        self.db = PostgresConnectionPool(**kwargs)
-        return self.db
+    def get_config_string(self, name):
+        try:
+            return self._config.get(self.environment, name)
+        except NoOptionError, e:
+            raise ConfigurationError(e.args[0])
+
+    def _parse_database_url(self, url):
+        mo = re.match(r'postgres://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[\w-]+)(?::(?P<port>\d+))?/(?P<database>\w+)', url)
+        if not mo:
+            raise ConfigurationError("Couldn't parse database connection string %s" % dbstring)
+        params = mo.groupdict()
+        params['port'] = int(params['port'] or 5432)
+        return params
+
+    def get_database(self, name='database'):
+        import re
+        try:
+            return self._dbs[name]
+        except KeyError:
+            dbstring = self.get_config_string(name)
+            params = self._parse_database_url(dbstring)
+            self._dbs[name] = PostgresConnectionPool(**params)
+            return self._dbs[name]
 
     def __call__(self, environ, start_response):
         req = Request(environ)
