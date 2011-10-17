@@ -1,6 +1,9 @@
-import os
-import imp
 import sys
+import os
+import os.path
+import imp
+
+from ConfigParser import SafeConfigParser as ConfigParser
 
 
 def get_app(relpath=None):
@@ -24,7 +27,10 @@ def get_app(relpath=None):
             path = os.path.abspath(os.path.join(path, '..'))
         else:
             sys.path.insert(0, path)
-            app = imp.load_module('app', *module)
-            return app.app
+            config = ConfigParser()
+            config.read([os.path.join(path, 'app.cfg')])
+            app = imp.load_module('app', *module).app
+            app._config = config
+            return app
 
     raise ImportError("Couldn't find Nucleon app to import")
