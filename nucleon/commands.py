@@ -2,6 +2,18 @@
 from nucleon.main import bootstrap_gevent
 bootstrap_gevent()
 
+import os
+import os.path
+
+
+def new(args):
+    # find skel directory
+    skel = os.path.join(os.path.dirname(__file__), 'skel')
+    import shutil
+    dest = args[1]
+    shutil.copytree(skel, dest)
+    print "Created app", dest
+
 
 def start(args):
     """Start the app located in the current directory."""
@@ -21,6 +33,7 @@ def help(args):
 
 
 COMMANDS = {
+    'new': new,
     'start': start,
     '-h': help,
     '--help': help,

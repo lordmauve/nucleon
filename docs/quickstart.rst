@@ -3,9 +3,11 @@ Getting started with Nucleon
 
 Starting a new nucleon app is easy. Just type::
 
-    $ nucleon new
+    $ nucleon new example_project
+    $ cd example_project
 
-to set up a basic nucleon project.
+to set up a basic nucleon project (obviously, you can use any name instead of
+``example_project``).
 
 You should then see several files in your project directory:
 

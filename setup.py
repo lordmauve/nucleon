@@ -8,6 +8,9 @@ setup(
     version=__version__,
     packages=['nucleon'],
     scripts=['scripts/nucleon'],
+    package_data={
+        'nucleon': ['skel/*'],
+    },
     install_requires=[
         'WebOb>=1.1.1',
         'gevent==0.13.6',
