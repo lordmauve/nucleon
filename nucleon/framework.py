@@ -1,4 +1,3 @@
-import os.path
 import re
 import traceback
 from ConfigParser import NoOptionError
@@ -7,11 +6,10 @@ from ConfigParser import NoOptionError
 from webob import Request, Response
 
 from .database.pgpool import PostgresConnectionPool
-from .http import Http404, JsonResponse 
+from .http import Http404, JsonResponse
 
 
 __all__ = ['Application', 'ConfigurationError']
-
 
 
 class ConfigurationError(Exception):
@@ -28,7 +26,7 @@ class Application(object):
 
     def view(self, pattern, **vars):
         """Decorator that binds a view function to a URL pattern.
-        
+
         This view will only be used to serve GET requests. All other methods
         will result in a HTTP response of 405 Method Not Allowed.
         """
@@ -39,7 +37,7 @@ class Application(object):
 
     def add_view(self, pattern, view, **vars):
         """Bind view functions to a given URL pattern.
-        
+
         If view is a callable then this will be served when the request path
         matches pattern and the method is GET.
 
@@ -52,15 +50,19 @@ class Application(object):
         self.routes.append((re.compile('^%s$' % pattern), view, vars))
 
     def get_config_string(self, name):
-        """Get a configuration string from the current config environment."""
-
         try:
             return self._config.get(self.environment, name)
         except NoOptionError, e:
             raise ConfigurationError(e.args[0])
 
     def _parse_database_url(self, url):
-        """Parse database connection parameters from a URL string."""
+        """Parse a database URL and return a dictionary.
+
+        If the database URL is not correctly formatted a ConfigurationError
+        will be raised. Individual parameters are available in the dictionary
+        that is returned.
+
+        """
         regex = (
             r'postgres://(?P<user>[^:]+):(?P<password>[^@]+)'
             '@(?P<host>[\w-]+)(?::(?P<port>\d+))?'
@@ -75,7 +77,15 @@ class Application(object):
         return params
 
     def get_database(self, name='database'):
-        """Retrieve a database connection pool by name."""
+        """Return a connection pool with methods for database operations.
+
+        Most of the methods of psycopg.connect() are or will be supported such
+        as cursor() and connection(). The connection pool will handle choosing
+        an available connection. If there are no connections available then
+        the call to methods of the get_database object will block until one
+        becomes available.
+        
+        """
         import re
         try:
             return self._dbs[name]
@@ -113,7 +123,7 @@ class Application(object):
                             return Response('', allow=view.keys(), status=405)
                     elif request.method != 'GET':
                         return Response('', allow=['GET'], status=405)
-                            
+
                     args = match.groups()
                     resp = view(request, *args, **vars)
                     if not isinstance(resp, Response):
@@ -129,4 +139,3 @@ class Application(object):
         except:
             tb = traceback.format_exc()
             return Response(tb, status=500, content_type='text/plain')
-
