@@ -1,3 +1,4 @@
+import os.path
 import re
 import traceback
 from ConfigParser import NoOptionError
@@ -20,7 +21,7 @@ class ConfigurationError(Exception):
 class Application(object):
     """Connects URLS to views and dispatch requests to them."""
     def __init__(self, environment='default'):
-        """Create a blank application configured for the specified environment."""
+        """Create a blank application configured for environment."""
         self.routes = []
         self.environment = environment
         self._dbs = {}
@@ -51,20 +52,30 @@ class Application(object):
         self.routes.append((re.compile('^%s$' % pattern), view, vars))
 
     def get_config_string(self, name):
+        """Get a configuration string from the current config environment."""
+
         try:
             return self._config.get(self.environment, name)
         except NoOptionError, e:
             raise ConfigurationError(e.args[0])
 
     def _parse_database_url(self, url):
-        mo = re.match(r'postgres://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[\w-]+)(?::(?P<port>\d+))?/(?P<database>\w+)', url)
+        """Parse database connection parameters from a URL string."""
+        regex = (
+            r'postgres://(?P<user>[^:]+):(?P<password>[^@]+)'
+            '@(?P<host>[\w-]+)(?::(?P<port>\d+))?'
+            '/(?P<database>\w+)'
+        )
+        mo = re.match(regex, url)
         if not mo:
-            raise ConfigurationError("Couldn't parse database connection string %s" % dbstring)
+            msg = "Couldn't parse database connection string %s" % dbstring
+            raise ConfigurationError(msg)
         params = mo.groupdict()
         params['port'] = int(params['port'] or 5432)
         return params
 
     def get_database(self, name='database'):
+        """Retrieve a database connection pool by name."""
         import re
         try:
             return self._dbs[name]
@@ -73,6 +84,16 @@ class Application(object):
             params = self._parse_database_url(dbstring)
             self._dbs[name] = PostgresConnectionPool(**params)
             return self._dbs[name]
+
+    def load_sql(self, filename):
+        """Load an SQL script from filename.
+        
+        filename must be a path relative to the directory from which the app
+        was loaded.
+
+        """
+        from nucleon.database.management import SQLScript
+        return SQLScript.open(os.path.join(self._path, filename))
 
     def __call__(self, environ, start_response):
         req = Request(environ)

@@ -27,3 +27,14 @@ def test_db_op():
     """Test that a database query works."""
     resp = app.get('/2')
     eq_(resp.json['x^2'], 4)
+
+
+from nucleon.commands import initdb
+
+def test_db_query():
+    initdb([])
+    pgpool = app.app.get_database('database')
+    with pgpool.cursor() as c:
+        c.execute('SELECT name from test;')
+        results = [r[0] for r in c.fetchall()]
+        eq_(results, ['foo;', 'bar;', 'baz\''])
