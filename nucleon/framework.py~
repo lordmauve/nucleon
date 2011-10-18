@@ -108,7 +108,7 @@ class Application(object):
                             return Response('', allow=view.keys(), status=405)
                     elif request.method != 'GET':
                         return Response('', allow=['GET'], status=405)
-
+                            
                     args = match.groups()
                     resp = view(request, *args, **vars)
                     if not isinstance(resp, Response):
