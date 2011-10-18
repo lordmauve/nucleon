@@ -1,14 +1,14 @@
-/* Write SQL below to create and initialise database tables.
+/* SQL schema for testing database management operations; 
 
-   This file will be run to set up the database. Nucleon will also parse this
-   file to work out how to reset the database.
+  This contains syntax that we have to pay particular care
+  about handling correctly.
+
 */
 
-/*
 CREATE TABLE test (
-    id INTEGER SERIAL PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL
 );
 
-INSERT INTO test(name) VALUES ('foo'), ('bar'), ('baz');
-*/
+-- Test that various ways of quoting are correctly parsed;
+INSERT INTO test(name) VALUES ($val$foo;$val$), ('bar;'), ('baz''');

@@ -30,6 +30,7 @@ def get_app(relpath=None):
             config = ConfigParser()
             config.read([os.path.join(path, 'app.cfg')])
             app = imp.load_module('app', *module).app
+            app._path = path
             app._config = config
             return app
 
