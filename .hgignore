@@ -2,5 +2,13 @@ syntax: glob
 
 nenv
 *.pyc
-*~
 docs/_build
+bin/
+develop-eggs/
+eggs/
+parts/
+.installed.cfg
+downloads/
+bootstrap.py
+nucleon.egg-info/
+*~
