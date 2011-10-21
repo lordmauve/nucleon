@@ -11,4 +11,4 @@ CREATE TABLE test (
 );
 
 -- Test that various ways of quoting are correctly parsed;
-INSERT INTO test(name) VALUES ($val$foo;$val$), ('bar;'), ('baz''');
+INSERT INTO test(name) VALUES ($val$foo;$val$), ('bar;'), ('baz'''), ('');

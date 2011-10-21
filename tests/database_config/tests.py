@@ -29,12 +29,30 @@ def test_db_op():
     eq_(resp.json['x^2'], 4)
 
 
-from nucleon.commands import initdb
+from nucleon.commands import syncdb, resetdb
 
-def test_db_query():
-    initdb([])
+def test_initialise_database():
+    """Test the initdb command gives us a usable database."""
+    syncdb([])
     pgpool = app.app.get_database('database')
     with pgpool.cursor() as c:
         c.execute('SELECT name from test;')
         results = [r[0] for r in c.fetchall()]
-        eq_(results, ['foo;', 'bar;', 'baz\''])
+        eq_(results, ['foo;', 'bar;', 'baz\'', ''])
+
+
+def test_reinitialise_database():
+    """Test that the initdb command restores the database completely."""
+    syncdb([])
+    pgpool = app.app.get_database('database')
+    with pgpool.connection() as conn:
+        c = conn.cursor()
+        c.execute('ALTER TABLE test RENAME COLUMN name TO title;')
+        c.execute('INSERT INTO test(title) VALUES(%s)', ('banana',))
+        conn.commit()
+    
+    resetdb([])
+    with pgpool.cursor() as c:
+        c.execute('SELECT name from test;')
+        results = [r[0] for r in c.fetchall()]
+        eq_(results, ['foo;', 'bar;', 'baz\'', ''])
