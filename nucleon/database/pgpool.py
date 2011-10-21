@@ -6,14 +6,16 @@ from gevent.queue import Queue, Empty
 
 
 class PostgresConnectionPool(object):
-    """A pool of psycopg2 connections.
-
-    Each connection is borrowed from the pool by a context manager;
-    thus, whatever happens, the connection is returned to the pool
-    when the context is exited.
-    """
+    """A pool of psycopg2 connections shared between multiple greenlets."""
 
     def __init__(self, initial=1, limit=20, **settings):
+        """Construct a pool of connections.
+
+        settings are passed straight to psycopg2.connect. initial connections
+        are opened immediately. More connections may be opened if they are
+        required, but at most limit connections may be open at any one time.
+
+        """
         self.settings = settings
         self.sem = Semaphore(limit)
         self.size = 0

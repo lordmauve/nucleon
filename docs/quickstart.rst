@@ -12,6 +12,7 @@ to set up a basic nucleon project (obviously, you can use any name instead of
 You should then see several files in your project directory:
 
 * ``app.py`` - the application setup - :doc:`views <framework>` can be written here.
+* ``app.cfg`` - per-environment :doc:`configuration settings <configuration>`
 * ``database.sql`` - an SQL script to create database tables and initial data
 * ``tests.py`` - a suitable place to write `nose tests`_.
 
@@ -112,28 +113,4 @@ database table:
 
 We can have nucleon create this table by running::
 
-    $ nucleon initdb
-
-Adding views
-''''''''''''
-
-Let's add a view to post a new task. Open up ``app.py``. The first view we need
-is one to retrieve the tasks::
-
-    from nucleon.database.shortcuts import db_select_list
-    @app.view('/todo')
-    def get_tasks(request):
-        return db_select_list('SELECT id, title, complete FROM tasks')
-
-Huh? That was simple. So what have we written?
-
-1. We have written a view for the URL path ``/todo`` (when requested with HTTP
-   ``GET``).
-2. This returns a list of dictionaries. Each dictionary has keys ``id``,
-   ``title``, and ``complete``.
-
-What happens when we request this URL? The response document is
-
-.. code-block:: javascript
-
-    []
+    $ nucleon syncdb

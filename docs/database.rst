@@ -1,19 +1,54 @@
-Database Configuration
-======================
+PostgreSQL Database Access
+==========================
 
-A Database Configuration example resides in ``nucleon/skel/app.cfg`` and a typical line would look like this:
+Nucleon includes a wrapper for the psycopg2 PostgreSQL driver that shares a
+pool of database connections between greenlets. The number of open database
+connections is capped for performance.
 
-``database = postgres://username:password@host:5432/databasename``
+Making database queries
+-----------------------
 
-where the username, password, host, port and datbasename should be specified and the app.cfg file should be placed in your application folder.
+A PostgreSQL connection pool can be retreived from each app's Application object.
 
-Database initialisation is achieved via puppet and this should include creating the database(s) and grant statements.
+.. class:: nucleon.framework.Application
 
-Once created, Nucleon allows for database syncronisation using the syncdb command which will drop then create the tables in the database.
+    .. automethod:: get_database
 
-Using the database connection
-=============================
+        ``name`` is looked up in the application's config file, for the
+        application's current environment. See :ref:`database-configuration`.
 
-A ``ConfigurationError`` will be raised when starting the application if the database string is incorrectly formatted.
+When a greenlet wishes to make a database request, it "borrows" a connection
+from the pool. A context manager interface ensures that the connection is
+returned to the pool when the greenlet no longer needs it.
 
-The method ``get_database`` then returns a list of database connection objects which are derived from psycopg2.connect(). You may then use methods such as cursor() or connection() to perform database operations. An available connection will be used or the call will block until a connection is available.
+.. automodule:: nucleon.database
+
+.. autoclass:: nucleon.database.PostgresConnectionPool
+
+    .. automethod:: connection()
+
+        A context manager that borrows a connection from the pool. The
+        connection can be used exclusively within the wrapped section::
+
+            with pgpool.connection() as conn:
+                c = conn.cursor()
+                c.execute('INSERT INTO fruit(name) VALUES(%s)', ('banana',))
+                conn.commit()
+
+        If there are no connections left in the pool, the requesting greenlet
+        will block until a database connection is available.
+
+    .. automethod:: cursor()
+
+        A context manager that borrows a connection from the pool, using it to
+        provide a single database cursor. This cursor can be used directly::
+
+            with pgpool.cursor() as c:
+                c.execute('SELECT * FROM fruit')
+                return c.fetchall()
+
+        This is exactly equivalent to ::
+
+            with pgpool.connection() as conn:
+                c = conn.cursor()
+                ...
