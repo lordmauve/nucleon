@@ -13,6 +13,9 @@ Contents:
 
    quickstart
    framework
+   database
+   configuration
+   commands
    gevent
 
 Indices and tables

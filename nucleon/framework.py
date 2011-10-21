@@ -78,15 +78,7 @@ class Application(object):
         return params
 
     def get_database(self, name='database'):
-        """Return a connection pool with methods for database operations.
-
-        Most of the methods of psycopg.connect() are or will be supported such
-        as cursor() and connection(). The connection pool will handle choosing
-        an available connection. If there are no connections available then
-        the call to methods of the get_database object will block until one
-        becomes available.
-        
-        """
+        """Return the database connection pool for a configuration name."""
         import re
         try:
             return self._dbs[name]
