@@ -25,14 +25,27 @@ def start(args):
     serve(app)
 
 
-def initdb(args):
-    """Initialise the database by running the SQL script"""
+def syncdb(args):
+    """Create tables that do not exist."""
     from nucleon.loader import get_app
     app = get_app()
-    sqlscript = app.load_sql('database.sql').make_initdb()
+    sqlscript = app.load_sql('database.sql')
+    db = app.get_database()
+    sqlscript = sqlscript.make_sync_script(db)
+    for response in sqlscript.execute(db):
+        print response
+
+
+def resetdb(args):
+    """Fully re-initialise the database."""
+    from nucleon.loader import get_app
+    app = get_app()
+    sqlscript = app.load_sql('database.sql')
+    sqlscript = sqlscript.make_reinitialize_script()
     db = app.get_database()
     for response in sqlscript.execute(db):
         print response
+
 
 
 def help(args):
@@ -46,7 +59,8 @@ def help(args):
 COMMANDS = {
     'new': new,
     'start': start,
-    'initdb': initdb,
+    'syncdb': syncdb,
+    'resetdb': resetdb,
     '-h': help,
     '--help': help,
     'help': help,
