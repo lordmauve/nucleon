@@ -62,8 +62,8 @@ class Application(object):
         Decorator that starts the function at the Application start up
         use as:
 
-        @app.on_start
-        def initialize_amqp_mappings():
+        >>> @app.on_start
+        ... def initialize_amqp_mappings():
         """
         self.on_start_funcs.append(func)
         return func
