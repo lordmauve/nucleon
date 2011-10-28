@@ -14,7 +14,7 @@ def bootstrap_gevent():
     gevent.monkey.patch_all()
 
     # Patch psycopg2 to use gevent coroutines instead of blocking
-    from .database import psyco_gevent
+    from nucleon.database import psyco_gevent
     psyco_gevent.make_psycopg_green()
 
 
@@ -23,6 +23,7 @@ def serve(app, logfile='nucleon.log', port=8888):
     from gevent.pywsgi import WSGIServer
     with open(logfile, 'w') as f:
         server = WSGIServer(('0.0.0.0', port), app, log=f)
+        app.run_on_start_funcs()
         server.serve_forever()
 
 

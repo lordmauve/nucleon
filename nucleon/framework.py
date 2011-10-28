@@ -8,7 +8,7 @@ from webob import Request, Response
 
 from .database.pgpool import PostgresConnectionPool
 from .http import Http404, JsonResponse
-
+from .amqp.pool import PukaDictPool
 
 __all__ = ['Application', 'ConfigurationError']
 
@@ -22,6 +22,7 @@ class Application(object):
     def __init__(self, environment='default'):
         """Create a blank application configured for environment."""
         self.routes = []
+        self.on_start_funcs = []
         self.environment = environment
         self._dbs = {}
 
@@ -56,6 +57,24 @@ class Application(object):
         except NoOptionError, e:
             raise ConfigurationError(e.args[0])
 
+    def on_start(self,func):
+        """
+        Decorator that starts the function at the Application start up
+        use as:
+
+        @app.on_start
+        def initialize_amqp_mappings():
+        """
+        self.on_start_funcs.append(func)
+        return func
+
+    def run_on_start_funcs(self):
+        """
+        Executes all on_start decorated functions
+        """
+        for func in self.on_start_funcs:
+            func()
+
     def _parse_database_url(self, url):
         """Parse a database URL and return a dictionary.
 
@@ -87,6 +106,23 @@ class Application(object):
             params = self._parse_database_url(dbstring)
             self._dbs[name] = PostgresConnectionPool(**params)
             return self._dbs[name]
+
+    def get_amqp_pool(self,type="publish"):
+        """
+        Returns amqp connection object (puka wrapper) from specific pool
+        initializes the pool on first request (configuration is defined in app.cfg)
+
+        Usage:
+        
+        >>> with app.get_amqp_pool().connection() as conn:
+        ...    conn.basic_sync_publish(...)
+
+        """
+        URL = "amqp_%s_url" % type
+        POOL = "amqp_%s_pool_size" % type
+        amqp_url = self.get_config_string(URL)
+        amqp_pool_size = int(self.get_config_string(POOL))
+        return PukaDictPool(name=type, size=amqp_pool_size, amqp_url=amqp_url)
 
     def load_sql(self, filename):
         """Load an SQL script from filename.

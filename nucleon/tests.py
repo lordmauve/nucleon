@@ -10,4 +10,5 @@ def get_test_app(relpath=None):
     """
 
     app = get_app(relpath)
+    app.run_on_start_funcs()
     return TestApp(app)
