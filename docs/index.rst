@@ -14,6 +14,7 @@ Contents:
    quickstart
    framework
    database
+   amqp
    configuration
    commands
    gevent

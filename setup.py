@@ -20,5 +20,6 @@ setup(
         'gevent==0.13.6',
         'psycopg2>=2.2.1',
         'WebTest>=1.3.1',
+        'puka>=0.0.3',
     ],
 )
