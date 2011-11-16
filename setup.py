@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 from nucleon import __version__
 
@@ -6,7 +6,7 @@ from nucleon import __version__
 setup(
     name="nucleon",
     version=__version__,
-    packages=['nucleon'],
+    packages=find_packages(),
     entry_points={
         'console_scripts': [
             'nucleon = nucleon.commands:main',
