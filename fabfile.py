@@ -3,7 +3,6 @@ import re
 from os.path import dirname, join
 
 from fabric.api import env, run, sudo, put, local
-from fabric.context_managers import cd
 from fabric.decorators import hosts, runs_once
 from fabric.contrib.project import rsync_project
 
@@ -24,6 +23,6 @@ def deploy_nucleondocs():
 
 @runs_once
 def build_nucleondocs():
-    # Generate nucleon docs (uses Sphinx)
+    """Generate nucleon docs (uses Sphinx)"""
     path = join(dirname(__file__),'docs')
     local('cd %s && make html' % path)
