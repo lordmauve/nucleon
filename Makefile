@@ -9,11 +9,15 @@ bootstrap.py :
 bin/buildout : bootstrap.py
 	python bootstrap.py -d
 
-development : bin/buildout
+parts/mercurial-recipe : 
+	mkdir -p parts eggs
+	git clone https://github.com/munhitsu/mercurial-recipe.git parts/mercurial-recipe
+
+development : parts/mercurial-recipe bin/buildout 
 	env ARCHFLAGS=${ARCHFLAGS} bin/buildout
 
 clean :
-	rm -rf bin develop-eggs eggs parts .installed.cfg downloads bootstrap.py
+	rm -rf bin develop-eggs eggs parts .installed.cfg downloads bootstrap.py *.egg-info
 	find . -name "*~" -exec rm {} \;
 	find . -name "DEADJOE" -exec rm {} \;
 	find . -name "*.pyc" -exec rm {} \;
