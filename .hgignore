@@ -13,3 +13,4 @@ bootstrap.py
 nucleon.egg-info/
 *~
 .idea/
+*.log
