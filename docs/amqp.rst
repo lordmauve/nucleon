@@ -46,6 +46,7 @@ Warning: remember to wait for all callbacks before you leave the context.
 
     .. automethod:: connection
 
+
 Receiving AMQP messages
 -----------------------
 
@@ -76,35 +77,17 @@ Tricker async listening::
 
 Warning: remember to wait for all callbacks before you leave the context.
 
-A pattern to create daemon registered for messages::
+A recommended pattern to create daemon handling incoming messages::
 
     @app.on_start
     def start_listener_thread():
-        log.debug("start_listener_thread")
 
-        def listen_for_listener():
+        def print_message(connection,promise,message):
+            print "Received on A %s" % message
+            connection.basic_ack(message) #remember to ack/reject the message
 
-            def listener_cb(promise,message):
-                print "Received on A %s" % message
-                connection.basic_ack(message) #remember to ack/reject the message
+        app.register_and_spawn_amqp_listener(queue='listenerA', message_callback=print_message)
 
-            with app.get_amqp_pool(type="listen").connection() as connection:
-                connection.basic_consume(queue='listenerA',callback=listener_cb)
-                connection.loop()
-
-        def listen_for_foo():
-
-            def listener_cb(promise,message):
-                print "Received on B %s" % message
-                connection.basic_ack(message) #remember to ack/reject the message
-
-            with app.get_amqp_pool(type="listen").connection() as connection:
-                connection.basic_consume(queue='listenerB',callback=listener_cb)
-                connection.loop()
-
-
-        gevent.spawn(listen_for_listener)
-        gevent.spawn(listen_for_foo)
 
 Configuring AMQP
 ----------------
@@ -132,3 +115,4 @@ A nice pattern is to create @app.on_start function that prepares all configurati
 
             promise = connection.queue_bind(queue="listener2", exchange="unit_test_room", routing_key="user2")
             connection.wait(promise)
+
