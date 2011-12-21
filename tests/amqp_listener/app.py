@@ -33,6 +33,7 @@ def version(request):
     """An example view that returns the version of the app."""
     return {'version': __version__}
 
+
 @app.on_start
 def configure_amqp():
     with app.get_amqp_pool(type="listen").connection() as connection:
@@ -51,21 +52,28 @@ def configure_amqp():
         promise = connection.queue_bind(queue="listenerB", exchange="test_room", routing_key="door")
         connection.wait(promise)
 
+
 @app.on_start
-def start_listener_thread():
+def start_listener_thread_easy_way():
+    """
+    recommended pattern
+    """
+
+    def print_message(connection,promise,message):
+        print "Received on A %s" % message
+        connection.basic_ack(message) #remember to ack/reject the message
+
+    app.register_and_spawn_amqp_listener(queue='listenerA', message_callback=print_message)
+
+
+@app.on_start
+def start_listener_thread_raw_way():
+    """
+    raw access pattern
+    """
     log.debug("start_listener_thread")
 
     def listen_for_listener():
-
-        def listener_cb(promise,message):
-            print "Received on A %s" % message
-            connection.basic_ack(message) #remember to ack/reject the message
-
-        with app.get_amqp_pool(type="listen").connection() as connection:
-            connection.basic_consume(queue='listenerA',callback=listener_cb)
-            connection.loop()
-
-    def listen_for_foo():
 
         def listener_cb(promise,message):
             print "Received on B %s" % message
@@ -73,8 +81,10 @@ def start_listener_thread():
 
         with app.get_amqp_pool(type="listen").connection() as connection:
             connection.basic_consume(queue='listenerB',callback=listener_cb)
+            app._registered_amqp_listeners.append((connection, None))
+            print "Listening on amqp for listenerB"
             connection.loop()
+            print "Ending listenerB"
 
-
-    gevent.spawn(listen_for_listener)
-    gevent.spawn(listen_for_foo)
+    g1 = gevent.spawn(listen_for_listener)
+    app._registered_amqp_listeners.append((None, g1))

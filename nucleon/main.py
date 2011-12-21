@@ -7,6 +7,19 @@ the Nucleon server.
 
 """
 
+import gevent
+import signal
+
+HALT_TIMEOUT = 10
+
+def register_signal(app,server):
+    def signal_handler():
+        print("Got SIGUSR1 - shutting down")
+        app.stop_serving(timeout=HALT_TIMEOUT)
+        server.stop()
+        print("Shutting down complete")
+    gevent.signal(signal.SIGUSR1, signal_handler)
+
 
 def bootstrap_gevent():
     # Patch the standard library to use gevent
@@ -18,13 +31,15 @@ def bootstrap_gevent():
     psyco_gevent.make_psycopg_green()
 
 
-def serve(app, logfile='nucleon.log', port=8888):
+def serve(app, logfile='nucleon.log', host='0.0.0.0', port=8888):
     """Start the server. Does not return."""
     from gevent.pywsgi import WSGIServer
     with open(logfile, 'w') as f:
-        server = WSGIServer(('0.0.0.0', port), app, log=f)
+        server = WSGIServer((host, port), app, log=f)
         app.run_on_start_funcs()
-        server.serve_forever()
+        register_signal(app,server)
+        print "Listening on %s:%s" % (host, port)
+        server.serve_forever(stop_timeout=5)
 
 
 if __name__ == '__main__':
