@@ -191,9 +191,12 @@ class Application(object):
         Registers AMQP message_callback function as a listener on a queue (synchronous, internal API)
 
         Arguments:
-        queue -- AMQP queue name (remember to create one first)
-        message_callback -- callback function that will be executed on each receiver message given following arguments message_callback(connection, promise, message)
-        type -- name of a pool to take listener from (defaults to 'listen')
+        queue :
+            AMQP queue name (remember to create one first)
+        message_callback :
+            callback function that will be executed on each receiver message given following arguments message_callback(connection, promise, message)
+        type :
+            name of a pool to take listener from (defaults to 'listen')
         """
         def listener_callback(promise, message):
             """
@@ -228,10 +231,12 @@ class Application(object):
         ... register_and_spawn_listener(app, queue='listenerA', message_callback=print_message)
 
 
-        Arguments:
-        queue -- AMQP queue name (remember to create one first)
-        message_callback -- callback function that will be executed on each receiver message given following arguments message_callback(connection, promise, message)
-        type -- name of a pool to take listener from (defaults to 'listen')
+        Arguments
+
+        :queue: AMQP queue name (remember to create one first)
+        :message_callback: callback function that will be executed on each receiver message given following arguments message_callback(connection, promise, message)
+        :type: name of a pool to take listener from (defaults to 'listen')
+
         """
         greenlet = gevent.spawn(self._register_amqp_listener,queue,message_callback,type=type)
         self._registered_amqp_listeners.append((None, greenlet))
@@ -250,8 +255,9 @@ class Application(object):
         """
         Starts nucleon shutdown procedure and waits for its finish.
 
-        Arguments:
-        timeout -- timeout to wait for shutdown
+        Arguments
+
+        :timeout: timeout to wait for shutdown
 
         """
         gevent.joinall([
@@ -264,8 +270,10 @@ class Application(object):
         """
         Stops serving new http requests and waits for all existing to finish.
 
-        Arguments:
-        timeout -- timeout to wait for shutdown
+        Arguments
+
+        :timeout: timeout to wait for shutdown
+
         """
         self.running_state = STATE_CLOSING
         self.active_requests_counter.wait_for_zero(timeout)
@@ -275,8 +283,10 @@ class Application(object):
         """
         Stops listening for incoming AMQP messages and waits for all listening loops to finish.
 
-        Arguments:
-        timeout -- timeout to wait for shutdown
+        Arguments
+
+        :timeout: timeout to wait for shutdown
+
         """
         greenlets = []
         for (connection, greenlet) in self._registered_amqp_listeners:

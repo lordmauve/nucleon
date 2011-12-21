@@ -64,8 +64,10 @@ class Http503(HttpException):
         '''
         Overrides Exception __init__ to pop optional retry_after
 
-        Arguments:
-        retry_after -- when shall client retry the query
+        Arguments
+
+        :retry_after: when shall client retry the query
+
         all remaining arguments are passed as a message response
         '''
         if kwargs.has_key('retry_after'):
