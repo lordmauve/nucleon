@@ -33,9 +33,11 @@ class DictEntryPool(object):
         """
         Initializes a pool of pre-opened AMQP connections.
 
-        Arguments:
-        size -- count of pre-opened connections
-        amqp_url -- configuration string for puka library (i.e.: amqp://user:pass@host:port/vhost)
+        Arguments
+
+        :size: count of pre-opened connections
+        :amqp_url: configuration string for puka library (i.e.: amqp://user:pass@host:port/vhost)
+
         """
         self.queue = Queue(size)
 
@@ -47,11 +49,14 @@ class DictEntryPool(object):
         """
         Opens an AMQP connection (internal API).
 
-        Arguments:
-        amqp_url -- configuration string for puka library (i.e.: amqp://user:pass@host:port/vhost)
+        Arguments
 
-        Returns:
-        puka.Client
+        :amqp_url: configuration string for puka library (i.e.: amqp://user:pass@host:port/vhost)
+
+        Returns
+
+        :puka.Client:
+
         """
         client = puka.Client(amqp_url)
         promise = client.connect()
@@ -74,12 +79,15 @@ class DictEntryPool(object):
         Additionally when Connection has been broken (ConenctionBroken exception) than it reinitializes the connection on exit.
         This will not help you with existing messages but we're avoiding pool leaking.
 
-        Arguments:
-        block -- if True (default) will wait for available connection in the pool
-        timeout --- timeout when waiting for connection
+        Arguments
 
-        Returns:
-        PukaConnection or None
+        :block: if True (default) will wait for available connection in the pool
+        :timeout: timeout when waiting for connection
+
+        Returns
+
+        :PukaConnection or None:
+
         """
         conn = self.queue.get(block,timeout)
         wrapped_conn = PukaConnection(self, conn)
@@ -113,12 +121,15 @@ class DictEntryPool(object):
         Unless explicitly required please please refrain from usage
         Recommended accessor is DictEntryPool.connection()
 
-        Arguments:
-        block -- if True (default) will wait for available connection in the pool
-        timeout --- timeout when waiting for connection
+        Arguments
 
-        Returns:
-        PukaConnection or None
+        :block: if True (default) will wait for available connection in the pool
+        :timeout: timeout when waiting for connection
+
+        Returns
+
+        :PukaConnection or None:
+
         """
         conn = self.queue.get(block,timeout)
         return PukaConnection(self, conn)
