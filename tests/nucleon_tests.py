@@ -3,6 +3,11 @@
 # Coverage statistics are obtained for all modules in coverage.xml
 #
 
+
+#Patch the standard library to use gevent
+from  nucleon.main import bootstrap_gevent
+bootstrap_gevent()
+
 import nose
 import os
 import shutil
