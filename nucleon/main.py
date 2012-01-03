@@ -8,11 +8,11 @@ the Nucleon server.
 """
 
 import gevent
-import signal
 
 HALT_TIMEOUT = 10
 
 def register_signal(app,server):
+    import signal
     def signal_handler():
         print("Got SIGUSR1 - shutting down")
         app.stop_serving(timeout=HALT_TIMEOUT)
@@ -38,11 +38,6 @@ def serve(app, logfile='nucleon.log', host='0.0.0.0', port=8888):
         server = WSGIServer((host, port), app, log=f)
         app.run_on_start_funcs()
         register_signal(app,server)
-        print "Listening on %s:%s" % (host, port)
+        print "Listening on: %s:%s" % (host, port)
+        print "Configuration used: %s" % (app.environment)
         server.serve_forever(stop_timeout=5)
-
-
-if __name__ == '__main__':
-    #TODO: fork/daemonize here - or after binding port?
-    bootstrap_gevent()
-    serve()
