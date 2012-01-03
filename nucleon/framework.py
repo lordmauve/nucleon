@@ -76,14 +76,21 @@ class WaitCounter(object):
 
 class Application(object):
     """Connects URLS to views and dispatch requests to them."""
-    def __init__(self, environment='default'):
-        """Create a blank application configured for environment."""
+    def __init__(self):
+        """
+        Create a blank application configured for environment.
+
+        Don't add any configuration dependent functionality here as configuration section may be overwritten by command line arguments.
+        """
         self.routes = []
         self.on_start_funcs = []
-        self.environment = environment
+        if 'NUCLEON_CONFIGURATION' in os.environ:
+            self.environment = os.environ['NUCLEON_CONFIGURATION']
+        else:
+            self.environment = 'default'
         self._dbs = {}
         self.running_state = STATE_SERVING
-        self.active_requests_counter = WaitCounter()#
+        self.active_requests_counter = WaitCounter()
         self._registered_amqp_listeners = []
 
     def view(self, pattern, **vars):
