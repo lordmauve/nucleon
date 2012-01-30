@@ -36,7 +36,8 @@ class SubNucleon(object):
     """
     def __init__(self):
         def starter():
-            nucleon.commands.start([])
+            nucleon_app = nucleon.commands.start()
+            nucleon_app()
         self.sp = Process(target=starter)
         self.sp.start()
 
