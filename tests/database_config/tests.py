@@ -19,7 +19,7 @@ def test_config_string_without_port():
 def test_secondary_database():
     """Test database connections with different configurations."""
     pgpool = app.app.get_database('database2')
-    eq_(pgpool.settings['user'], 'some_other_user')
+    eq_(pgpool.settings['user'], 'nucleondb2')
     eq_(pgpool.settings['port'], 5432)
 
 
