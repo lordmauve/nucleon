@@ -3,8 +3,15 @@ from nucleon.main import bootstrap_gevent
 bootstrap_gevent()
 
 import os
+import sys
 import os.path
 import argparse
+
+DEFAULTS = {
+    'host': '127.0.0.1',
+    'port': 8888,
+    'logfile': 'nucleon.log',
+}
 
 
 class Command(object):
@@ -67,7 +74,7 @@ class AppCommand(Command):
     def get_app(self, args):
         from nucleon.loader import get_app
         app = get_app()
-        if args.configuration is not None:
+        if args and hasattr(args, 'configuration') and args.configuration is not None:
             app.environment = args.configuration
         return app
 
@@ -75,20 +82,25 @@ class AppCommand(Command):
 class StartCommand(AppCommand):
     """Start the app located in the current directory"""
     # Import app from the current directory
-
+    
     def _configure_parser(self, parser):
         super(StartCommand,self)._configure_parser(parser)
-        parser.add_argument('--host', type=str, default='0.0.0.0',
+        parser.add_argument('--host', type=str, default=DEFAULTS['host'],
                             help='ip/hostname of interface where server will bind (default: %(default)s)')
-        parser.add_argument('--port', type=int, default=8888,
+        parser.add_argument('--port', type=int, default=DEFAULTS['port'],
                             help='port where server will bind (default: %(default)s)')
-        parser.add_argument('--logfile', type=str, default='nucleon.log',
+        parser.add_argument('--logfile', type=str, default=DEFAULTS['logfile'],
                             help='requests log in format similar to access_log (default: %(default)s)')
 
-    def __call__(self, args):
+    def __call__(self, args = None):
         from nucleon.main import serve
+        
+        host, port, logfile = DEFAULTS['host'], DEFAULTS['port'], DEFAULTS['logfile']
         app = self.get_app(args)
-        serve(app,logfile=args.logfile,host=args.host,port=args.port)
+        if args:
+            host, port, logfile = args.host, args.port, args.logfile
+
+        serve(app,logfile=logfile,host=host,port=port)
 
 
 class SyncdbCommand(AppCommand):
@@ -121,6 +133,12 @@ COMMANDS = {
     'syncdb': SyncdbCommand,
     'resetdb': ResetdbCommand,
 }
+
+# create commands as global variables
+module = sys.modules[__name__]
+for command, command_class in COMMANDS.iteritems():
+    setattr(module, command, command_class)
+
 
 
 def main():

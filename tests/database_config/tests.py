@@ -33,7 +33,7 @@ from nucleon.commands import syncdb, resetdb
 
 def test_initialise_database():
     """Test the initdb command gives us a usable database."""
-    syncdb([])
+    syncdb()
     pgpool = app.app.get_database('database')
     with pgpool.cursor() as c:
         c.execute('SELECT name from test;')
@@ -43,7 +43,7 @@ def test_initialise_database():
 
 def test_reinitialise_database():
     """Test that the initdb command restores the database completely."""
-    syncdb([])
+    syncdb()
     pgpool = app.app.get_database('database')
     with pgpool.connection() as conn:
         c = conn.cursor()
@@ -51,7 +51,7 @@ def test_reinitialise_database():
         c.execute('INSERT INTO test(title) VALUES(%s)', ('banana',))
         conn.commit()
     
-    resetdb([])
+    resetdb()
     with pgpool.cursor() as c:
         c.execute('SELECT name from test;')
         results = [r[0] for r in c.fetchall()]
