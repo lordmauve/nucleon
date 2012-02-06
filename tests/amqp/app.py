@@ -4,6 +4,7 @@ __version__ = '0.0.1'
 
 
 from nucleon.framework import Application
+from nucleon.signals import on_initialise
 import logging
 import gevent
 from gevent.queue import Queue
@@ -72,7 +73,7 @@ def push_sync(request):
 
             return {'value': recv['body']}
 
-@app.on_start
+@on_initialise
 def configure_amqp():
     log.debug("configure_amqp")
     with app.get_amqp_pool().connection() as connection:

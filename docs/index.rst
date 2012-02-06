@@ -14,6 +14,7 @@ Contents:
    quickstart
    framework
    database
+   signals
    amqp
    configuration
    commands

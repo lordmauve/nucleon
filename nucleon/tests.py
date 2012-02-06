@@ -1,4 +1,5 @@
 from nucleon.loader import get_app
+from nucleon.signals import on_initialise, on_start
 from webtest import TestApp
 
 
@@ -10,5 +11,6 @@ def get_test_app(relpath=None):
     """
 
     app = get_app(relpath)
-    app.run_on_start_funcs()
+    on_initialise.fire()
+    on_start.fire()
     return TestApp(app)

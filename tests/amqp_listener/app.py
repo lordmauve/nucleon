@@ -4,6 +4,7 @@ __version__ = '0.0.1'
 
 
 from nucleon.framework import Application
+from nucleon.signals import on_initalise
 import logging
 import gevent
 log = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ def version(request):
     return {'version': __version__}
 
 
-@app.on_start
+@on_initialise
 def configure_amqp():
     with app.get_amqp_pool(type="listen").connection() as connection:
         promise = connection.exchange_declare("test_room")
@@ -53,7 +54,7 @@ def configure_amqp():
         connection.wait(promise)
 
 
-@app.on_start
+@on_initialise
 def start_listener_thread_easy_way():
     """
     recommended pattern
@@ -66,7 +67,7 @@ def start_listener_thread_easy_way():
     app.register_and_spawn_amqp_listener(queue='listenerA', message_callback=print_message)
 
 
-@app.on_start
+@on_initialise
 def start_listener_thread_raw_way():
     """
     raw access pattern
