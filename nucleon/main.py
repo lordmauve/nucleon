@@ -34,10 +34,13 @@ def bootstrap_gevent():
 def serve(app, logfile='nucleon.log', host='0.0.0.0', port=8888):
     """Start the server. Does not return."""
     from gevent.pywsgi import WSGIServer
+    from nucleon.signals import on_initialise, on_start
+
     with open(logfile, 'w') as f:
         server = WSGIServer((host, port), app, log=f)
-        app.run_on_start_funcs()
-        register_signal(app,server)
+        on_initialise.fire()
+        register_signal(app, server)
         print "Listening on: %s:%s" % (host, port)
         print "Configuration used: %s" % (app.environment)
+        gevent.spawn_later(1, on_start.fire)
         server.serve_forever(stop_timeout=5)

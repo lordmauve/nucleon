@@ -79,7 +79,8 @@ Warning: remember to wait for all callbacks before you leave the context.
 
 A recommended pattern to create daemon handling incoming messages::
 
-    @app.on_start
+    from nucleon.signals import on_initialise
+    @on_initialise
     def start_listener_thread():
 
         def print_message(connection,promise,message):
@@ -95,9 +96,10 @@ Configuring AMQP
 By default two pools are pre-configured. One for listening and one for publishing. You define them in ``app.cfg``.
 
 Remember to make sure that you have all exchanges, queues and bindings defined before you start the code.
-A nice pattern is to create @app.on_start function that prepares all configuration::
+A nice pattern is to register an `on_initialise` handler that prepares all configuration::
 
-    @app.on_start
+    from nucleon.signals import on_initialise
+    @on_initialise
     def configure_amqp():
         log.debug("configure_amqp")
         with app.get_amqp_pool().connection() as connection:

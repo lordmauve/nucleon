@@ -50,8 +50,6 @@ a wider variety of return values or response codes.
 
     .. automethod:: view
 
-    .. automethod:: on_start
-    
 
 Processing Requests
 -------------------
