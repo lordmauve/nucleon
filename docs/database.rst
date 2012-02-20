@@ -10,7 +10,9 @@ Making database queries
 
 A PostgreSQL connection pool can be retreived from each app's Application object.
 
-.. class:: nucleon.framework.Application
+.. automodule:: nucleon.framework
+
+.. class:: Application
 
     .. automethod:: get_database
 

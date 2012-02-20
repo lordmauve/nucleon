@@ -1,7 +1,6 @@
 import re
 import os
 import gevent
-from ConfigParser import NoOptionError
 
 from webob import Request, Response
 
@@ -9,10 +8,11 @@ from .database.pgpool import PostgresConnectionPool
 from .http import Http404, Http503, HttpException, JsonResponse
 from .amqp.pool import PukaDictPool
 from .util import WaitCounter
+from .config import settings, ConfigurationError
 
 import traceback
 
-__all__ = ['Application', 'ConfigurationError']
+__all__ = ['Application']
 
 STATE_SERVING = 1
 STATE_CLOSING = 2
@@ -20,23 +20,14 @@ STATE_CLOSED = 3
 
 RETRY_AFTER_503 = 12
 
-class ConfigurationError(Exception):
-    """The application instance was misconfigured."""
-
 
 class Application(object):
     """Connects URLS to views and dispatch requests to them."""
     def __init__(self):
         """
-        Create a blank application configured for environment.
-
-        Don't add any configuration dependent functionality here as configuration section may be overwritten by command line arguments.
+        Create a blank application.
         """
         self.routes = []
-        if 'NUCLEON_CONFIGURATION' in os.environ:
-            self.environment = os.environ['NUCLEON_CONFIGURATION']
-        else:
-            self.environment = 'default'
         self._dbs = {}
         self.running_state = STATE_SERVING
         self.active_requests_counter = WaitCounter()
@@ -68,10 +59,7 @@ class Application(object):
         self.routes.append((re.compile('^%s$' % pattern), view, vars))
 
     def get_config_string(self, name):
-        try:
-            return self._config.get(self.environment, name)
-        except NoOptionError, e:
-            raise ConfigurationError(e.args[0])
+        return getattr(settings, name)
 
     def _parse_database_url(self, url):
         """Parse a database URL and return a dictionary.
@@ -104,14 +92,14 @@ class Application(object):
             self._dbs[name] = PostgresConnectionPool(**params)
             return self._dbs[name]
 
-    def get_amqp_pool(self,type="publish"):
+    def get_amqp_pool(self, type="publish"):
         """
         Returns AMQP connections pool
 
         It initializes the pool on first request (configuration is defined in app.cfg)
 
         Usage:
-        
+
         >>> with app.get_amqp_pool().connection() as conn:
         ...    conn.basic_sync_publish(...)
 
@@ -121,7 +109,6 @@ class Application(object):
         amqp_url = self.get_config_string(URL)
         amqp_pool_size = int(self.get_config_string(POOL))
         return PukaDictPool(name=type, size=amqp_pool_size, amqp_url=amqp_url, app=self)
-
 
     def _register_amqp_listener(self, queue, message_callback, type='listen'):
         """
@@ -262,7 +249,7 @@ class Application(object):
         Called by _handle.
         """
         if self.running_state == STATE_CLOSING:
-            raise Http503("Shutting down",retry_after=RETRY_AFTER_503)
+            raise Http503("Shutting down", retry_after=RETRY_AFTER_503)
         path = request.path_info
         for regex, view, vars in self.routes:
             match = regex.match(path)

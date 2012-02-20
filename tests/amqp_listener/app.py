@@ -4,7 +4,7 @@ __version__ = '0.0.1'
 
 
 from nucleon.framework import Application
-from nucleon.signals import on_initalise
+from nucleon.signals import on_initialise
 import logging
 import gevent
 log = logging.getLogger(__name__)

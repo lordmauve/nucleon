@@ -6,9 +6,6 @@ app = get_test_app(__file__)
 from nucleon.framework import WaitCounter
 import gevent
 
-# Write your Nose tests below
-
-
 
 class TimeException(Exception):
     pass
