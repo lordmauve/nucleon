@@ -13,14 +13,20 @@ dirlist = os.listdir(thisdir)
 sys.path.append(os.path.abspath(os.path.dirname(thisdir)))
 
 #Patch the standard library to use gevent
-from  nucleon.main import bootstrap_gevent
+from nucleon.main import bootstrap_gevent
 bootstrap_gevent()
 
-import shutil
-
+# Imports for this script
 import nose
-
 from coverage import coverage
+
+
+def unload_nucleon():
+    """Unload all nucleon code from sys.modules."""
+    for k in sys.modules.keys():
+        if k.split('.')[0] == 'nucleon':
+            del(sys.modules[k])
+
 
 #Get a list of all the elements in the current directory
 thisdir = os.path.abspath(os.path.dirname(__file__))
@@ -40,6 +46,9 @@ for d in dirlist:
 
             #Change into the directory of the module we are testing
             os.chdir(os.path.abspath(d))
+
+            # Unload loaded modules
+            unload_nucleon()
 
             #Run the nosetest with xunit enabled
             args = ['nosetests', '-v', '-s',

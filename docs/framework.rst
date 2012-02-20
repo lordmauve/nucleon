@@ -15,7 +15,7 @@ a wider variety of return values or response codes.
 
 .. automodule:: nucleon.framework
 
-.. autoclass:: nucleon.framework.Application
+.. autoclass:: Application
 
     An Application instance acts as a WSGI-compatible callable, and can be
     wrapped with WSGI-compliant middleware or served using a variety of

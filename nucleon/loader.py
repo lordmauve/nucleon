@@ -3,7 +3,7 @@ import os
 import os.path
 import imp
 
-from ConfigParser import SafeConfigParser as ConfigParser
+from nucleon.config import settings, SETTINGS_FILENAME
 
 
 def get_app(relpath=None):
@@ -13,6 +13,7 @@ def get_app(relpath=None):
     current working directory.)
 
     """
+
     if relpath is None:
         relpath = os.getcwd()
     elif not os.path.isdir(relpath):
@@ -27,11 +28,10 @@ def get_app(relpath=None):
             path = os.path.abspath(os.path.join(path, '..'))
         else:
             sys.path.insert(0, path)
-            config = ConfigParser()
-            config.read([os.path.join(path, 'app.cfg')])
             app = imp.load_module('app', *module).app
+            configfile = os.path.join(path, SETTINGS_FILENAME)
+            settings._load(filename=configfile)
             app._path = path
-            app._config = config
             return app
 
     raise ImportError("Couldn't find Nucleon app to import")
