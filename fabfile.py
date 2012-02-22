@@ -6,7 +6,7 @@ from fabric.api import env, run, sudo, local, cd, get, task, put
 from fabric.decorators import hosts, runs_once
 from fabric.contrib.project import rsync_project
 from fabric.contrib.files import exists
-from fabric.context_managers import prefix
+from fabric.context_managers import prefix, settings
 
 
 @hosts('bruges.vertulabs.co.uk')
@@ -84,14 +84,21 @@ def run_nucleon_tests():
 
         with virtualenv('~/nucleon/NUCLEON_ENV'):
             # Install distribution and dependencies into virtualenv
-            run('pip install "nose>=1.1.2" "coverage>=3.5.1"')
+            run('pip install "nose>=1.1.2" "coverage>=3.5.1" pylint')
             with cd('nucleon-%s' % version):
                 run('python setup.py develop')
 
-            # Run the tests
-            with cd('tests'):
-                run('python nucleon_tests.py')
+            with settings(warn_only=True):
+                # Run the tests
+                with cd('tests'):
+                    run('python nucleon_tests.py')
+
+                # Generate pylint report
+                with cd('nucleon-%s' % version):
+                    out = run('pylint --output-format=parseable nucleon')
 
     # Retrieve the results
     get('nucleon/tests/test_xunit_*', local_path='tests/')
     get('nucleon/tests/coverage.xml', local_path='tests/')
+    with open('tests/pylint.report', 'w') as f:
+        f.write(out)
