@@ -1,17 +1,16 @@
-import sys
-import re
-from os.path import dirname, join
+import posixpath
+from contextlib import contextmanager
+from os.path import dirname, join, abspath
 
-from fabric.api import env, run, sudo, put, local, cd, get
+from fabric.api import env, run, sudo, local, cd, get, task, put
 from fabric.decorators import hosts, runs_once
 from fabric.contrib.project import rsync_project
 from fabric.contrib.files import exists
-
-env.user = 'nucleon'
-env.key_filename = '/var/lib/jenkins/.ssh/nucleon_id_rsa'
+from fabric.context_managers import prefix
 
 
 @hosts('bruges.vertulabs.co.uk')
+@task
 def deploy_nucleondocs():
     """Generate nucleon docs and deploy to the docs webserver"""
 
@@ -21,58 +20,78 @@ def deploy_nucleondocs():
 
     # Copy generated docs to docs_webserver on target machine
     sudo('chown -R %s: %s' % (env.user, PATH))
-    rsync_project(remote_dir=PATH, local_dir=join(dirname(__file__), 'docs/_build/html/'), delete=True)
+    rsync_project(
+        remote_dir=PATH,
+        local_dir=join(dirname(__file__), 'docs/_build/html/'),
+        delete=True)
     sudo('chown -R docs:www-data ' + PATH)
 
 
 @runs_once
+@task
 def build_nucleondocs():
     """Generate nucleon docs (uses Sphinx)"""
-    path = join(dirname(__file__),'docs')
+    path = join(dirname(__file__), 'docs')
     local('cd %s && make html' % path)
 
 
-#@hosts('geneva.vertulabs.co.uk')
+@contextmanager
+def virtualenv(path):
+    """Context manager that performs commands with an active virtualenv, eg:
+
+    path is the path to the virtualenv to apply
+
+    >>> with virtualenv(env):
+            run('python foo')
+
+    """
+    activate = posixpath.join(path, 'bin/activate')
+    if not exists(activate):
+        raise OSError("Cannot activate virtualenv %s" % path)
+    with prefix('. %s' % activate):
+        yield
+
+
+RSYNC_EXCLUSIONS = ['.hg', '*.swp', '*.pyc', '*.i']
+
+
+@task
 def run_nucleon_tests():
+    """Run nucleon tests on a staging server."""
+    # Build source distribution
+    version = local('python setup.py -V', capture=True)
+    local('rm -rf dist/*')
+    local('python setup.py sdist')
 
-    JOB_DIR = '/home/nucleon/nucleon-core'
-    VIRTUALENV_PATH = '%s/NUCLEON_ENV' % JOB_DIR
-    NUCLEON_RESULTS = '%s/workspace/tests/test_xunit_*' % JOB_DIR
-    RSYNC_EXCLUSIONS =['*.rst','*.pyc','*.i']
-    JENKINS_RESULTS_DIR = '/var/lib/jenkins/jobs/nucleon-tests/workspace/tests/'
-    NUCLEON_COVER_XML = '%s/workspace/tests/coverage.xml' % JOB_DIR
+    # Delete the virtualenv, if it exists
+    run('rm -rf nucleon')
+    run('mkdir -p nucleon')
 
+    # Copy and unpack source distribution
+    put('dist/nucleon-%s.tar.gz' % version, 'nucleon/')
+    run('tar xzf nucleon/nucleon-%s.tar.gz -C nucleon/' % version)
 
-    #Delete the virtualenv, if it exists
-    if exists(JOB_DIR):
-        run('rm -rf %s' % JOB_DIR)
+    # Copy tests to remote machine
+    rsync_project(
+        remote_dir='nucleon/tests',
+        local_dir=abspath(dirname(__file__)) + '/tests/',
+        delete=True,
+        exclude=RSYNC_EXCLUSIONS)
 
-    #Create new virtual env
-    run('mkdir %s' % JOB_DIR)
-    run('mkdir %s' %VIRTUALENV_PATH)
-    run('virtualenv %s' % VIRTUALENV_PATH)
+    with cd('nucleon'):
+        # Create new virtual env
+        run('virtualenv NUCLEON_ENV')
 
+        with virtualenv('~/nucleon/NUCLEON_ENV'):
+            # Install distribution and dependencies into virtualenv
+            run('pip install "nose>=1.1.2" "coverage>=3.5.1"')
+            with cd('nucleon-%s' % version):
+                run('python setup.py develop')
 
-    #Copy the nucleon project from the Jenkins server to the Nucleon server
-    rsync_project(remote_dir=JOB_DIR, local_dir=dirname(__file__), delete=True, exclude=RSYNC_EXCLUSIONS)
+            # Run the tests
+            with cd('tests'):
+                run('python nucleon_tests.py')
 
-
-    #Install nose
-    run('%s/bin/pip install nose>=1.1.2' % VIRTUALENV_PATH)
-
-    #Install the covergae module
-    run('%s/bin/pip install coverage>=3.5.1' % VIRTUALENV_PATH)
-
-
-    # Install nucleon in the virtual env
-    with cd('%s/workspace' % JOB_DIR):
-        run('%s/bin/python setup.py install' % VIRTUALENV_PATH)
-
-    # Run the tests in the virtual env
-    with cd('%s/workspace/tests' % JOB_DIR):
-       run('%s/bin/python nucleon_tests.py' % VIRTUALENV_PATH)
-
-
-    #copy the resulst back up to the Jenkins server
-    get(NUCLEON_RESULTS, local_path='%s' % JENKINS_RESULTS_DIR)
-    get(NUCLEON_COVER_XML, local_path='%s' % JENKINS_RESULTS_DIR)
+    # Retrieve the results
+    get('nucleon/tests/test_xunit_*', local_path='tests/')
+    get('nucleon/tests/coverage.xml', local_path='tests/')
