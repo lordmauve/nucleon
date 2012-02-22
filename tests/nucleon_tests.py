@@ -13,6 +13,7 @@ dirlist = os.listdir(thisdir)
 sys.path.append(os.path.abspath(os.path.dirname(thisdir)))
 
 #Patch the standard library to use gevent
+import nucleon
 from nucleon.main import bootstrap_gevent
 bootstrap_gevent()
 
@@ -33,7 +34,7 @@ thisdir = os.path.abspath(os.path.dirname(__file__))
 dirlist = os.listdir(thisdir)
 
 #Start collecting coverage data
-cov = coverage()
+cov = coverage(branch=True, source=nucleon.__path__)
 cov.start()
 
 #For each item in the list, first check whether it's a dir, then check whether
@@ -62,4 +63,16 @@ for d in dirlist:
 #Stop collecting the coverage data and convert it into XML format
 cov.stop()
 cov.save()
-cov.xml_report()
+cov.xml_report(outfile='coverage.xml.in')
+
+# Rewrite coverage report to remove absolute paths
+nucleon_path = os.path.dirname(nucleon.__path__[0]) + '/'
+nucleon_mod = nucleon_path.replace('/', '.')
+with open('coverage.xml.in', 'r') as input:
+    with open('coverage.xml', 'w') as output:
+        for l in input:
+            l = l.replace(nucleon_path, '')
+            l = l.replace(nucleon_mod, '')
+            output.write(l)
+
+cov.report(file=sys.stdout)
