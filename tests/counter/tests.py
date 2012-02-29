@@ -1,7 +1,7 @@
 import time
 from nose.tools import *
-from nucleon.tests import get_test_app
-app = get_test_app(__file__)
+from nucleon import tests
+app = tests.get_test_app(__file__)
 
 from nucleon.framework import WaitCounter
 import gevent

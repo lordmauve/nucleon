@@ -1,8 +1,8 @@
 from nose.tools import eq_, raises
-from nucleon.tests import get_test_app
+from nucleon import tests
 from nucleon.config import settings, Settings, ConfigurationError
 
-get_test_app(__file__)
+tests.get_test_app(__file__)
 
 
 def test_config_loaded():

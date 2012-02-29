@@ -1,29 +1,22 @@
 from nose.tools import *
-from nucleon.tests import get_test_app
+from nucleon import tests
 import logging
 import gevent
-from gevent.event import AsyncResult
 from gevent.queue import Queue
 log = logging.getLogger(__name__)
-app = get_test_app(__file__)
-
-
-# Write your Nose tests below
-
-
+app = tests.get_test_app(__file__)
 
 
 #can listeners share connection
 #can senders share connection -> add lock
 
-"""
-Note message exchanges are registered at app.py
+#NB: message exchanges are registered at app.py
 
-"""
 def test_00_version():
     log.debug("test_0_version")
     resp = app.get('/')
     eq_(resp.json, {'version': '0.0.1'})
+
 
 def test_01_connections():
     log.debug("test_01_connections")
@@ -31,7 +24,7 @@ def test_01_connections():
     log.debug("p1: %s" % p1)
     p2 = app.app.get_amqp_pool("publish")
     log.debug("p2: %s" % p2)
-    eq_(p1,p2)
+    eq_(p1, p2)
     p3 = app.app.get_amqp_pool("listen")
     log.debug("p3: %s" % p3)
     assert p1 != p3

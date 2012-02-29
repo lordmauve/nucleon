@@ -1,13 +1,6 @@
-from nose.tools import *
-from nucleon.tests import get_test_app
-import logging
-import gevent
-log = logging.getLogger(__name__)
-app = get_test_app(__file__)
-
-
-# Write your Nose tests below
-
+from nose.tools import eq_
+from nucleon import tests
+app = tests.get_test_app(__file__)
 
 
 def test_0_version():
