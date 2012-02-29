@@ -1,5 +1,5 @@
 from nose.tools import eq_
-from nucleon.tests import get_test_app
+from nucleon import tests
 
 from collections import Counter
 from nucleon.signals import on_initialise, on_start, Signal
@@ -23,7 +23,7 @@ def set_started():
 
 
 # Trigger initialise/start handler
-app = get_test_app(__file__)
+app = tests.get_test_app(__file__)
 
 
 def test_on_initialise():

@@ -1,6 +1,6 @@
-from nucleon.tests import get_test_app
-from nose.tools import *
-app = get_test_app(__file__)
+from nucleon import tests
+from nose.tools import eq_
+app = tests.get_test_app(__file__)
 
 
 def test_version():

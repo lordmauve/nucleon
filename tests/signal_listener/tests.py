@@ -1,28 +1,24 @@
-from nose.tools import *
-from nucleon.tests import get_test_app
-import subprocess
-import signal
-import gevent
-import urllib2
 import time
-import logging
-import json
 import os
-import nucleon.commands
-import sys
+import signal
+import logging
+import urllib2
+import json
 from multiprocessing import Process
+
+import gevent
+from nose.tools import eq_
+from nucleon import tests
+import nucleon.commands
+
+
 log = logging.getLogger(__name__)
-
-
-app = get_test_app(__file__)
-
-
-# Write your Nose tests below
-
+app = tests.get_test_app(__file__)
 
 processes = []
 
-#TODO: to see failed asserts on gevent spawned functions please run as nose:nosetests -v -s
+#TODO: to see failed asserts on gevent spawned functions please run as
+# $ nose:nosetests -v -s
 
 
 class SubNucleon(object):
@@ -30,8 +26,10 @@ class SubNucleon(object):
     Abstraction over Nucleon http/amqp server to start, kill, join it.
 
     Considered base APIs:
-    - Subprocess was also nice but it required to provide hardcoded path to nucleon.py
-    - sys.fork was interfering with nosetests (forked process inherited all nose environment)
+    - Subprocess was also nice but it required to provide hardcoded path to
+      nucleon.py
+    - sys.fork was interfering with nosetests (forked process inherited all
+      nose environment)
     - multiprocessing.Process just works
     """
     def __init__(self):
@@ -49,6 +47,7 @@ class SubNucleon(object):
 
     def sigterm(self):
         self.sp.terminate()
+
 
 def setUp():
     """
@@ -73,6 +72,7 @@ def get_page():
     assert t_delta >= 3
     assert t_delta <= 3.5
 
+
 def get_page_503():
     """
     gets 503 page from local nucleon app
@@ -83,14 +83,15 @@ def get_page_503():
     code = 200
     try:
         f = urllib2.urlopen('http://localhost:8888/')
-        resp = f.read()
+        f.read()
         f.close()
     except urllib2.HTTPError as e:
         code = e.code
     t_end = time.time()
     t_delta = t_end - t_start
     assert t_delta <= 0.5
-    eq_(code,503)
+    eq_(code, 503)
+
 
 def test_signal():
     """
@@ -110,11 +111,13 @@ def test_signal():
     processes[0].sigusr1()
     gevent.sleep(0.1)
     g3 = gevent.spawn(get_page_503)
-    gevent.joinall([g1,g2,g3],raise_error=True)         # raise_error passes exceptions (failed asserts) from greenlets
+
+    # raise_error passes exceptions (failed asserts) from greenlets
+    gevent.joinall([g1, g2, g3], raise_error=True)
     try:
-        gevent.with_timeout(2,processes[0].join)
+        gevent.with_timeout(2, processes[0].join)
         timeout_exception = False
-    except gevent.Timeout as e:
+    except gevent.Timeout:
         timeout_exception = True
 
     assert timeout_exception == False, 'server was not killed'

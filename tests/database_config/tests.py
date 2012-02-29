@@ -5,9 +5,11 @@ with accounts as defined in app.cfg.
 
 """
 
-from nose.tools import *
-from nucleon.tests import get_test_app
-app = get_test_app(__file__)
+from nose.tools import eq_
+from nucleon import tests
+from nucleon.commands import syncdb, resetdb
+
+app = tests.get_test_app(__file__)
 
 
 def test_config_string_without_port():
@@ -29,8 +31,6 @@ def test_db_op():
     eq_(resp.json['x^2'], 4)
 
 
-from nucleon.commands import syncdb, resetdb
-
 def test_initialise_database():
     """Test the initdb command gives us a usable database."""
     syncdb()
@@ -50,7 +50,7 @@ def test_reinitialise_database():
         c.execute('ALTER TABLE test RENAME COLUMN name TO title;')
         c.execute('INSERT INTO test(title) VALUES(%s)', ('banana',))
         conn.commit()
-    
+
     resetdb()
     with pgpool.cursor() as c:
         c.execute('SELECT name from test;')
