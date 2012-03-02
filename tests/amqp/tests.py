@@ -10,53 +10,197 @@ app = tests.get_test_app(__file__)
 #can listeners share connection
 #can senders share connection -> add lock
 
-#NB: message exchanges are registered at app.py
+def amqp_setup():
+    log.debug("setup")
+    client = app.app.get_amqp_pool().connection()
+    client.exchange_declare("unit_test_room")
+    client.queue_declare(queue='listener1')
+    client.queue_declare(queue='listener2')
 
+    client.queue_bind(queue="listener1",
+        exchange="unit_test_room", routing_key="user1")
+
+    client.queue_bind(queue="listener2",
+        exchange="unit_test_room", routing_key="user2")
+
+
+def amqp_teardown():
+    log.debug("tear_down")
+    client = app.app.get_amqp_pool().connection()
+    client.exchange_delete("unit_test_room")
+
+    client.queue_delete(queue='listener1')
+
+    client.queue_delete(queue='listener2')
+
+"""
+Note message exchanges are registered at app.py
+
+"""
 def test_00_version():
     log.debug("test_0_version")
     resp = app.get('/')
     eq_(resp.json, {'version': '0.0.1'})
 
 
-def test_01_connections():
-    log.debug("test_01_connections")
-    p1 = app.app.get_amqp_pool("publish")
-    log.debug("p1: %s" % p1)
-    p2 = app.app.get_amqp_pool("publish")
-    log.debug("p2: %s" % p2)
-    eq_(p1, p2)
-    p3 = app.app.get_amqp_pool("listen")
-    log.debug("p3: %s" % p3)
-    assert p1 != p3
-    log.debug("connection...")
-    eq_(p1.queue.qsize(),5)
-    c1 = p1.get_conn()
-    eq_(p1.queue.qsize(),4)
-    c2 = p1.get_conn()
-    eq_(p1.queue.qsize(),3)
-    del(c1)
-    eq_(p1.queue.qsize(),4)
-    del(c2)
-    eq_(p1.queue.qsize(),5)
-    c3 = p1.get_conn()
-    eq_(p1.queue.qsize(),4)
-
-
+@with_setup(amqp_setup, amqp_teardown)
 def test_02_connections():
     log.debug("test_02_connections")
     p1 = app.app.get_amqp_pool("publish")
-    eq_(p1.queue.qsize(),5)
+    eq_(len(p1.pool), 5)
+    p1 = app.app.get_amqp_pool("listen")
+    eq_(len(p1.pool), 5)
 
+
+@with_setup(amqp_setup, amqp_teardown)
 def test_05_get_publish_connection():
     log.debug("test_05_get_publish_connection")
-    with app.app.get_amqp_pool().connection() as conn:
-        log.debug("connection: %s" % conn)
-        from nucleon.amqp.connection import PukaConnection
-        assert isinstance(conn,PukaConnection)
+    conn = app.app.get_amqp_pool().connection()
+    log.debug("connection: %s" % conn)
+    from nucleon.amqp.connection import PukaConnection
+    assert isinstance(conn, PukaConnection)
 
 
+def publish_message(conn, exchange, routing_key, body, callback=None):
+    """
+    Utility method to publish one message synchronously to given exchange
+    """
+    if callback:
+        return conn.publish(exchange=exchange, routing_key=routing_key,
+            body=body, callback=callback)
+    else:
+        return conn.publish(exchange=exchange, routing_key=routing_key,
+            body=body)
+
+
+def get_message(conn, queue, callback=None):
+    """
+    Utility method to get one message synchronously from given queue on given
+    connection.
+    """
+    if callback:
+        resp = conn.consume(queue=queue, callback=callback)
+    else:
+        resp = conn.consume(queue=queue)
+    return resp
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_sync_diff_connections():
+    conn = app.app.get_amqp_pool().connection()
+    # publish a message to the exchange
+    message_body = 'test_sync_diff_connections message 2'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    conn = app.app.get_amqp_pool().connection()
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_sync_publish_consume():
+    conn = app.app.get_amqp_pool().connection()
+    # publish a message to the exchange
+    message_body = 'test_publish_sync message 1'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_sync_multi_publish_consume():
+
+    conn = app.app.get_amqp_pool().connection()
+    # publish a message to the exchange
+    message_body = 'test_sync_multi_publish_consume message 1'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    conn = app.app.get_amqp_pool().connection()
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+    conn = app.app.get_amqp_pool().connection()
+    # publish a message to the exchange
+    message_body = 'test_sync_multi_publish_consume message 2'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    conn = app.app.get_amqp_pool().connection()
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+    conn = app.app.get_amqp_pool().connection()
+    # publish a message to the exchange
+    message_body = 'test_sync_multi_publish_consume message 3'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    conn = app.app.get_amqp_pool().connection()
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_sync_multi_publish_consume_same_conn():
+
+    conn = app.app.get_amqp_pool().connection()
+    # publish a message to the exchange
+    message_body = 'test_sync_multi_publish_consume_same_conn message 1'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+    # publish a message to the exchange
+    message_body = 'test_sync_multi_publish_consume_same_conn message 2'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+    # publish a message to the exchange
+    message_body = 'test_sync_multi_publish_consume_same_conn message 3'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+    eq_(resp, {})
+
+    # check that message was correctly published
+    resp = get_message(conn, 'listener1')
+    eq_(resp['body'], message_body)
+    # acknowledge the message
+    conn.ack(resp)
+
+
+@with_setup(amqp_setup, amqp_teardown)
 def test_09_publish_sync_get_sync():
     """
+    test_09_publish_sync_get_sync
     send message on connS1
     receive message on connR1
 
@@ -65,30 +209,86 @@ def test_09_publish_sync_get_sync():
     """
     log.debug("test_09_publish_get_sync")
 
-    with app.app.get_amqp_pool().connection() as connS1:
-        with app.app.get_amqp_pool(type="listen").connection() as connR1:
-            with app.app.get_amqp_pool(type="listen").connection() as connR2:
-                log.debug("connection: %s" % connS1)
-                log.debug("connection: %s" % connR1)
-                log.debug("connection: %s" % connR2)
-                from nucleon.amqp.pool import PukaConnection
-                assert isinstance(connS1,PukaConnection)
-                assert isinstance(connR1,PukaConnection)
-                assert isinstance(connR2,PukaConnection)
+    connS1 = app.app.get_amqp_pool().connection()
+    connR1 = app.app.get_amqp_pool(type="listen").connection()
+    connR2 = app.app.get_amqp_pool(type="listen").connection()
+    log.debug("connection: %s" % connS1)
+    log.debug("connection: %s" % connR1)
+    log.debug("connection: %s" % connR2)
+    from nucleon.amqp.pool import PukaConnection
+    assert isinstance(connS1, PukaConnection)
+    assert isinstance(connR1, PukaConnection)
+    assert isinstance(connR2, PukaConnection)
 
-                eq_(connS1.basic_sync_publish(exchange="unit_test_room",routing_key="user1",body="Hello my Get1"),{})
+    eq_(connS1.publish(exchange="unit_test_room",
+            routing_key="user1", body="Hello my Get1"),
+        {})
 
-                resp = connR1.basic_sync_get_and_ack(queue="listener1")
-                eq_(resp['body'],"Hello my Get1")
+    resp = connR1.consume(queue="listener1")
+    eq_(resp['body'], "Hello my Get1")
+    connR1.ack(resp)
 
-                eq_(connS1.basic_sync_publish(exchange="unit_test_room",routing_key="user1",body="Hello my Get2"),{})
+    eq_(connS1.publish(exchange="unit_test_room",
+            routing_key="user1", body="Hello my Get2"),
+        {})
+    resp = connR2.consume(queue="listener1")
+    eq_(resp['body'], "Hello my Get2")
+    connR2.ack(resp)
 
-                resp = connR2.basic_sync_get_and_ack(queue="listener1")
-                eq_(resp['body'],"Hello my Get2")
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_async_publish_consume():
+    conn = app.app.get_amqp_pool().connection()
+    message_body = 'test_async_publish_consume message 1'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+
+    recv_queue = Queue()
+
+    def recv_callback(promise, result):
+        print 'test_async_publish_consume recv_callback called. result = ',\
+            result
+        recv_queue.put(result)
+
+    get_message(conn, 'listener1', callback=recv_callback)
+    resp = recv_queue.get()
+    eq_(resp['body'], message_body)
+    conn.ack(resp)
 
 
+@with_setup(amqp_setup, amqp_teardown)
+def test_async_multi_publish_consume():
+    conn = app.app.get_amqp_pool().connection()
+    # first message
+    message_body = 'test_async_multi_publish_consume message 1'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+
+    recv_queue = Queue()
+
+    def recv_callback(promise, result):
+        print 'test_async_multi_publish_consume recv_callback result = ',\
+            result
+        recv_queue.put(result)
+
+    get_message(conn, 'listener1', callback=recv_callback)
+    resp = recv_queue.get()
+    eq_(resp['body'], message_body)
+    conn.ack(resp)
+
+    assert recv_queue.empty()
+
+    # second message
+    message_body = 'test_async_multi_publish_consume message 2'
+    resp = publish_message(conn, 'unit_test_room', 'user1', message_body)
+
+    resp = recv_queue.get()
+    eq_(resp['body'], message_body)
+    conn.ack(resp)
+
+
+@with_setup(amqp_setup, amqp_teardown)
 def test_20_publish_async_get_async():
     """
+    test_20_publish_async_get_async
     send message on connS1
     receive callback of send
 
@@ -103,127 +303,238 @@ def test_20_publish_async_get_async():
     receive callback of receive
     """
     log.debug("test_20_publish_async_get_async")
-    with app.app.get_amqp_pool().connection() as connS1:
-        with app.app.get_amqp_pool(type="listen").connection() as connR1:
-            with app.app.get_amqp_pool(type="listen").connection() as connR2:
-                log.debug("connection: %s" % connS1)
-                log.debug("connection: %s" % connR1)
-                log.debug("connection: %s" % connR2)
-                from nucleon.amqp.pool import PukaConnection
-                assert isinstance(connS1,PukaConnection)
-                assert isinstance(connR1,PukaConnection)
-                assert isinstance(connR2,PukaConnection)
-
-                sent_results = Queue()
-                recv_results = Queue()
-
-                def sent_callback(promise,result):
-                    sent_results.put(result)
-                    log.debug("Received result %s" % result)
-
-                def recv_callback(promise,result):
-                    recv_results.put(result)
-                    log.debug("Received result %s" % result)
-
-
-                connS1.basic_async_publish(exchange="unit_test_room",routing_key="user1",body="HelloASync1",callback=sent_callback)
-                connR1.basic_async_get_and_ack(queue="listener1",callback=recv_callback)
-
-                recv = recv_results.get()
-                sent = sent_results.get()
-                eq_(sent, {})
-                eq_(recv['body'],"HelloASync1")
-
-                connS1.basic_async_publish(exchange="unit_test_room",routing_key="user1",body="HelloASync2",callback=sent_callback)
-                connR2.basic_async_get_and_ack(queue="listener1",callback=recv_callback)
-
-                recv = recv_results.get()
-                sent = sent_results.get()
-                eq_(sent, {})
-                eq_(recv['body'],"HelloASync2")
-
-def test_21_connections():
-    """
-    let's make sure we have all connections ready in the pools
-    """
-    log.debug("test_21_connections")
-    gevent.sleep(1) #time for gc
-    p1 = app.app.get_amqp_pool("publish")
-    eq_(p1.queue.qsize(),5)
-    p2 = app.app.get_amqp_pool("listen")
-    eq_(p2.queue.qsize(),5)
-
-def test_30_with_publish_get_sync():
-    log.debug("test_30_with_publish_get_sync")
-    with app.app.get_amqp_pool().connection() as conn:
-        resp = conn.basic_sync_publish(exchange="unit_test_room",routing_key="user1",body="WithHello1")
-        eq_(resp,{})
-
-    with app.app.get_amqp_pool(type="listen").connection() as conn:
-        resp = conn.basic_sync_get_and_ack(queue="listener1")
-        eq_(resp['body'],"WithHello1")
-
-    with app.app.get_amqp_pool().connection() as conn:
-        resp = conn.basic_sync_publish(exchange="unit_test_room",routing_key="user1",body="WithHello2")
-        eq_(resp,{})
-
-    with app.app.get_amqp_pool(type="listen").connection() as conn:
-        resp = conn.basic_sync_get_and_ack(queue="listener1")
-        eq_(resp['body'],"WithHello2")
-
-def test_31_with_publish_get_async():
-    log.debug("test_31_with_publish_get_async")
+    connS1 = app.app.get_amqp_pool().connection()
+    connR1 = app.app.get_amqp_pool(type="listen").connection()
+    connR2 = app.app.get_amqp_pool(type="listen").connection()
+    log.debug("connection: %s" % connS1)
+    log.debug("connection: %s" % connR1)
+    log.debug("connection: %s" % connR2)
+    from nucleon.amqp.pool import PukaConnection
+    assert isinstance(connS1, PukaConnection)
+    assert isinstance(connR1, PukaConnection)
+    assert isinstance(connR2, PukaConnection)
 
     sent_results = Queue()
-    recv_results = Queue()
+    recv_results_r1 = Queue()
+    recv_results_r2 = Queue()
 
-    def sent_callback(promise,result):
+    def sent_callback(promise, result):
+        print 'sent_callback called'
         sent_results.put(result)
         log.debug("Received result %s" % result)
 
-    def recv_callback(promise,result):
-        recv_results.put(result)
+    def recv_callback_r1(promise, result):
+        print 'recv_callback_r1 called. result = ' + str(result)
+        recv_results_r1.put(result)
+
+    def recv_callback_r2(promise, result):
+        print 'recv_callback_r2 called. result = ' + str(result)
+        recv_results_r2.put(result)
+
+    message_body = 'HelloASync1'
+    publish_message(connS1, 'unit_test_room', 'user1',
+        message_body, callback=sent_callback)
+    sent = sent_results.get()
+    eq_(sent, {})
+
+    promise1 = get_message(connR1, "listener1",
+        callback=recv_callback_r1)
+    recv = recv_results_r1.get()
+    eq_(recv['body'], message_body)
+    connR1.ack(recv)
+    connR1.cancel(promise1)
+
+    message_body = 'HelloASync2'
+    publish_message(connS1, 'unit_test_room', 'user1',
+        message_body, callback=sent_callback)
+    # connS1.publish(exchange = "unit_test_room",
+    #     routing_key = "user1", body = "HelloASync2",
+    #     callback=sent_callback)
+
+    promise2 = get_message(connR2, "listener1",
+        callback=recv_callback_r2)
+    recv = recv_results_r2.get()
+    eq_(recv['body'], message_body)
+    connR2.ack(recv)
+    connR2.cancel(promise2)
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_31_with_publish_get_async():
+    log.debug("test_31_with_publish_get_async")
+
+    connR = None
+    sent_results = Queue()
+    recv_results = Queue()
+
+    def sent_callback(promise, result):
+        sent_results.put(result)
+        print 'sent_callback called'
         log.debug("Received result %s" % result)
 
+    def recv_callback(promise, result):
+        print 'recv_callback called. result = ' + str(result)
+        recv_results.put(result)
 
-    with app.app.get_amqp_pool().connection() as conn:
-        with app.app.get_amqp_pool(type="listen").connection() as connR:
-            conn.basic_async_publish(exchange="unit_test_room",routing_key="user1",body="WithHello1",callback=sent_callback)
-            connR.basic_async_get_and_ack(queue="listener1",callback=recv_callback)
+    conn = app.app.get_amqp_pool().connection()
+    connR = app.app.get_amqp_pool(type="listen").connection()
 
-            recv = recv_results.get()
-            sent = sent_results.get()
-            eq_(sent, {})
-            eq_(recv['body'],"WithHello1")
+    conn.publish(exchange="unit_test_room",
+        routing_key="user1", body="WithHello1",
+        callback=sent_callback)
 
-    with app.app.get_amqp_pool().connection() as conn:
-        with app.app.get_amqp_pool(type="listen").connection() as connR:
-            conn.basic_async_publish(exchange="unit_test_room",routing_key="user1",body="WithHello2",callback=sent_callback)
-            conn.basic_async_get_and_ack(queue="listener1",callback=recv_callback)
+    promise = connR.consume(queue="listener1",
+        callback=recv_callback)
 
-            recv = recv_results.get()
-            sent = sent_results.get()
-            eq_(sent, {})
-            eq_(recv['body'],"WithHello2")
+    recv = recv_results.get()
+    sent = sent_results.get()
+    eq_(sent, {})
+    eq_(recv['body'], "WithHello1")
+    connR.ack(recv)
+
+    conn.publish(exchange="unit_test_room",
+        routing_key="user1", body="WithHello1 again",
+        callback=sent_callback)
+
+    recv = recv_results.get()
+    sent = sent_results.get()
+    eq_(sent, {})
+    eq_(recv['body'], "WithHello1 again")
+    print 'results matched'
+    connR.ack(recv)
+
+    connR.cancel(promise)
+
+    assert sent_results.empty()
+    assert recv_results.empty()
+
+    conn = app.app.get_amqp_pool().connection()
+    connR = app.app.get_amqp_pool(type="listen").connection()
+    conn.publish(exchange="unit_test_room",
+        routing_key="user1", body="WithHello2",
+        callback=sent_callback)
+
+    promise = connR.consume(queue="listener1",
+        callback=recv_callback)
+
+    recv = recv_results.get()
+    sent = sent_results.get()
+    eq_(sent, {})
+    eq_(recv['body'], "WithHello2")
+    connR.ack(recv)
+    connR.cancel(promise)
 
 
-def test_99_tear_down():
-    log.debug("tear_down")
-    with app.app.get_amqp_pool().connection() as client:
-        try:
-            promise = client.exchange_delete("unit_test_room")
-            client.wait(promise)
-        except Exception as e:
-            print e
+@with_setup(amqp_setup, amqp_teardown)
+def test_multiple_publishers_same_connection():
+    """
+    Test locking. Publish multiple messages on the same connection
+    in different threads.
+    """
+    conn = app.app.get_amqp_pool().connection()
+    messages = ['pub' + str(i) for i in range(5)]
 
-        try:
-            promise = client.queue_delete(queue='listener1')
-            client.wait(promise)
-        except Exception as e:
-            print e
+    results = Queue()
 
-        try:
-            promise = client.queue_delete(queue='listener2')
-            client.wait(promise)
-        except Exception as e:
-            print e
+    def recv_callback(promise, result):
+        print 'received result: ', result
+        results.put(result)
+        conn.ack(result)
+
+    # register consumer with callback
+    consume_promise = conn.consume(queue="listener1",
+        callback=recv_callback)
+
+    # publish messages in different gevent threads
+    publishers = []
+    for msg in messages:
+        g = gevent.spawn(conn.publish, exchange="unit_test_room",
+            routing_key="user1", body=msg)
+        publishers.append(g)
+
+    gevent.joinall(publishers)
+
+    # check that we got all messages back
+    result_msgs = set()
+    i = 0
+    while i < len(messages):
+        result = results.get(timeout=5)
+        result_msgs.add(result['body'])
+        i += 1
+
+    assert result_msgs == set(messages)
+    conn.cancel(consume_promise)
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_register_listener_api_method():
+    conn = app.app.get_amqp_pool().connection()
+    messages = set(['Message ' + str(i) for i in range(10)])
+    received_queue = Queue()
+
+    def do_publish():
+        import time
+        for msg in messages:
+            conn.publish(exchange="unit_test_room",
+                routing_key="user1", body=msg)
+            print 'Published message: ' + msg
+            time.sleep(0.1)
+
+    def recv_callback(connection, promise, result):
+        print 'Result received: ' + result['body']
+        received_queue.put(result['body'])
+        connection.ack(result)
+
+    app.app.register_and_spawn_amqp_listener('listener1', recv_callback)
+
+    print 'Now publishing'
+    do_publish()
+
+    received_messages = set()
+    while len(received_messages) < 10:
+        received_messages.add(received_queue.get())
+    eq_(messages, received_messages)
+    print 'Finished test_register_listener_api_method'
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_multiple_listeners_api_method():
+    conn = app.app.get_amqp_pool().connection()
+    messages = set(['Message ' + str(i) for i in range(10)])
+    received_queue = Queue()
+
+    def do_publish():
+        import time
+        for msg in messages:
+            conn.publish(exchange="unit_test_room",
+                routing_key="user1", body=msg)
+            print 'Published message: ' + msg
+            time.sleep(0.1)
+
+    def recv_callback1(connection, promise, result):
+        print 'First consumer received: ' + result['body']
+        received_queue.put(result['body'])
+        connection.ack(result)
+
+    def recv_callback2(connection, promise, result):
+        print 'Second consumer received: ' + result['body']
+        received_queue.put(result['body'])
+        connection.ack(result)
+
+    def recv_callback3(connection, promise, result):
+        print 'Third consumer received: ' + result['body']
+        received_queue.put(result['body'])
+        connection.ack(result)
+
+    app.app.register_and_spawn_amqp_listener('listener1', recv_callback1)
+    app.app.register_and_spawn_amqp_listener('listener1', recv_callback2)
+    app.app.register_and_spawn_amqp_listener('listener1', recv_callback3)
+
+    print 'Now publishing'
+    do_publish()
+
+    received_messages = set()
+    while len(received_messages) < 10:
+        received_messages.add(received_queue.get())
+    eq_(messages, received_messages)
+    print 'Finished test_multiple_listeners_api_method'

@@ -5,8 +5,10 @@ from contextlib import contextmanager
 from puka.exceptions import ConnectionBroken
 
 import logging
+import traceback
 
 log = logging.getLogger(__name__)
+
 
 class PukaDictPool(object):
     """
@@ -23,7 +25,7 @@ class PukaDictPool(object):
         """
         if not hasattr(cls, '_instances'):
             cls._instances = dict()
-        if not cls._instances.has_key(name):
+        if name not in cls._instances:
             cls._instances[name] = DictEntryPool(size, amqp_url, *args, **kwargs)
         return cls._instances[name]
 
@@ -39,11 +41,15 @@ class DictEntryPool(object):
         :amqp_url: configuration string for puka library (i.e.: amqp://user:pass@host:port/vhost)
 
         """
-        self.queue = Queue(size)
+        self.pool = []
+        self.amqp_url = amqp_url
+        self.max_pool_size = size
+        self.next = 0
 
         for x in xrange(size):
             client = self._open_connection(amqp_url)
-            self.queue.put(client)
+            wrapped_client = PukaConnection(self, client)
+            self.pool.append(wrapped_client)
 
     def _open_connection(self, amqp_url):
         """
@@ -63,74 +69,80 @@ class DictEntryPool(object):
         client.wait(promise)
         return client
 
-    @contextmanager
-    def connection(self, block=True, timeout=None):
+    def connection(self):
         """
-        Provides context manager that handles AMQP connection lifecycle.
-
-        It is a recommended assessor for connection.
-
-        >>> with app.get_amqp_pool().connection() as conn:
-        ...    conn.basic_sync_publish(...)
-
-        >>> with app.get_amqp_pool(type="listen").connection() as conn:
-        ...    conn.basic_sync_get_and_ack(...)
-
-        Additionally when Connection has been broken (ConenctionBroken exception) than it reinitializes the connection on exit.
-        This will not help you with existing messages but we're avoiding pool leaking.
-
-        Arguments
-
-        :block: if True (default) will wait for available connection in the pool
-        :timeout: timeout when waiting for connection
+        Get a connection from the connection pool.
 
         Returns
 
         :PukaConnection or None:
 
         """
-        conn = self.queue.get(block,timeout)
-        wrapped_conn = PukaConnection(self, conn)
-        try:
-            yield wrapped_conn
+        connection = self.pool[self.next]
+        # round-robin
+        if self.next == self.max_pool_size - 1:
+            self.next = 0
+        else:
+            self.next += 1
+        return connection
+        # if self.queue.qsize() < 1:
+        #     # if pool is empty create a new connection
+        #     wrapped_conn = PukaConnection(self,
+        #                     self._open_connection(self.amqp_url))
+        #     print 'Puka pool empty. creating new connection. ', wrapped_conn.conn
+        # else:
+        #     wrapped_conn = self.queue.get(block, timeout)
 
-        except ConnectionBroken as ex:
-            log.error("Recovered from ConnectionBroken exception.")
-            try:
-                #let's try to kindly close the connection
-                promise = conn.close()
-                conn.wait(promise)
-            except:
-                pass
-            conn = None
-            wrapped_conn.conn = None #let's make sure that failed connection will be pulled back to queue by gc
-            wrapped_conn.pool = None
-            wrapped_conn = None
+        # try:
+        #     yield wrapped_conn
+        # except Exception as ex:
+        #     print 'Connection broken exception raised: ', traceback.format_exc()
+        #     try:
+        #         #let's try to kindly close the connection
+        #         promise = wrapped_conn.close()
+        #     except:
+        #         pass
 
-            #let's reinitialize connection
-            conn = self._open_connection(amqp_url)
-            wrapped_conn = PukaConnection(self, conn)
-        finally:
-            wrapped_conn._put_back()
+        #     #let's reinitialize connection
+        #     conn = self._open_connection(self.amqp_url)
+        #     wrapped_conn = PukaConnection(self, conn)
+        # finally:
+        #     print 'pool: putting back connection ', wrapped_conn.conn
+        #     self.put_back(wrapped_conn)
 
-    def get_conn(self, block=True, timeout=None):
-        """
-        Returns AMQP conenction.
 
-        Pulls connection object from pool and returns it. Unreferenced connection will eventually return to the pool.
-        Unless explicitly required please please refrain from usage
-        Recommended accessor is DictEntryPool.connection()
+    # def put_back(self, connection):
+    #     """
+    #     Puts back a connection into the pool, if the max_queue_size is not reached.
+    #     """
+    #     if self.queue.qsize() < self.max_queue_size:
+    #         self.queue.put(connection)
+    #     else:
+    #         print 'Queue full, so closing extra connection. ', connection.conn
+    #         try:
+    #             connection.close()
+    #         except:
+    #             pass
 
-        Arguments
+    # def get_conn(self, block=True, timeout=None):
+    #     """
+    #     Deprecated. Use the connection() context manager instead.
 
-        :block: if True (default) will wait for available connection in the pool
-        :timeout: timeout when waiting for connection
+    #     Returns AMQP conenction.
 
-        Returns
+    #     Pulls connection object from pool and returns it. Unreferenced connection will eventually return to the pool.
+    #     Unless explicitly required please please refrain from usage
+    #     Recommended accessor is DictEntryPool.connection()
 
-        :PukaConnection or None:
+    #     Arguments
 
-        """
-        conn = self.queue.get(block,timeout)
-        return PukaConnection(self, conn)
+    #     :block: if True (default) will wait for available connection in the pool
+    #     :timeout: timeout when waiting for connection
 
+    #     Returns
+
+    #     :PukaConnection or None:
+
+    #     """
+    #     conn = self.queue.get(block,timeout)
+    #     return conn

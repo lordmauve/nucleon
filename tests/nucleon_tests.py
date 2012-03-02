@@ -2,35 +2,34 @@
 # runs the tests and outputs the results to an xml file (test_xunit_module.xml)
 # Coverage statistics are obtained for all modules in coverage.xml
 #
-import os
-import sys
 
-#Get a list of all the elements in the current directory
-thisdir = os.path.abspath(os.path.dirname(__file__))
-dirlist = os.listdir(thisdir)
-
-# Add nucleon to sys.path
-sys.path.append(os.path.abspath(os.path.dirname(thisdir)))
-
-#Patch the standard library to use gevent
+# Patch the standard library to use gevent
 import nucleon
 from nucleon.main import bootstrap_gevent
 bootstrap_gevent()
 
+import os
+import sys
+
+thisdir = os.path.abspath(os.path.dirname(__file__))
+
+# Add nucleon to sys.path
+# sys.path.append(os.path.abspath(os.path.dirname(thisdir)))
+
 # Imports for this script
 import nose
 from coverage import coverage
-
+from gevent.hub import get_hub
 
 def unload_nucleon():
     """Unload all nucleon code from sys.modules."""
+    get_hub().destroy()
     for k in sys.modules.keys():
         if k.split('.')[0] == 'nucleon':
             del(sys.modules[k])
 
 
 #Get a list of all the elements in the current directory
-thisdir = os.path.abspath(os.path.dirname(__file__))
 dirlist = os.listdir(thisdir)
 
 #Start collecting coverage data
