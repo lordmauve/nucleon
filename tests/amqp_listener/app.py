@@ -37,22 +37,17 @@ def version(request):
 
 @on_initialise
 def configure_amqp():
-    with app.get_amqp_pool(type="listen").connection() as connection:
-        promise = connection.exchange_declare("test_room")
-        connection.wait(promise)
-
-        promise = connection.queue_declare(queue='listenerA')
-        connection.wait(promise)
-
-        promise = connection.queue_declare(queue='listenerB')
-        connection.wait(promise)
-
-        promise = connection.queue_bind(queue="listenerA", exchange="test_room", routing_key="window")
-        connection.wait(promise)
-
-        promise = connection.queue_bind(queue="listenerB", exchange="test_room", routing_key="door")
-        connection.wait(promise)
-
+    connection = app.get_amqp_pool(type="listen").connection()
+    promise = connection.exchange_declare("test_room")
+    
+    promise = connection.queue_declare(queue='listenerA')
+    
+    promise = connection.queue_declare(queue='listenerB')
+    
+    promise = connection.queue_bind(queue="listenerA", exchange="test_room", routing_key="window")
+    
+    promise = connection.queue_bind(queue="listenerB", exchange="test_room", routing_key="door")
+    
 
 @on_initialise
 def start_listener_thread_easy_way():
@@ -62,7 +57,7 @@ def start_listener_thread_easy_way():
 
     def print_message(connection,promise,message):
         print "Received on A %s" % message
-        connection.basic_ack(message) #remember to ack/reject the message
+        connection.ack(message) #remember to ack/reject the message
 
     app.register_and_spawn_amqp_listener(queue='listenerA', message_callback=print_message)
 
@@ -76,16 +71,16 @@ def start_listener_thread_raw_way():
 
     def listen_for_listener():
 
-        def listener_cb(promise,message):
+        def listener_cb(promise, message):
             print "Received on B %s" % message
-            connection.basic_ack(message) #remember to ack/reject the message
+            connection.ack(message) #remember to ack/reject the message
 
-        with app.get_amqp_pool(type="listen").connection() as connection:
-            connection.basic_consume(queue='listenerB',callback=listener_cb)
-            app._registered_amqp_listeners.append((connection, None))
-            print "Listening on amqp for listenerB"
-            connection.loop()
-            print "Ending listenerB"
+        connection = app.get_amqp_pool(type="listen").connection()
+        connection.consume(queue='listenerB', callback=listener_cb)
+        app._registered_amqp_listeners.append((connection, None))
+        print "Listening on amqp for listenerB"
+        connection.loop()
+        print "Ending listenerB"
 
     g1 = gevent.spawn(listen_for_listener)
     app._registered_amqp_listeners.append((None, g1))
