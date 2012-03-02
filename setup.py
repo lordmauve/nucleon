@@ -12,7 +12,10 @@ INSTALL_REQUIRES = [
         'puka>=0.0.3',
     ]
 if sys.version_info < (2, 7):
-    INSTALL_REQUIRES.append('argparse>=1.2.1')
+    INSTALL_REQUIRES += [
+        'argparse>=1.2.1',
+        'ordereddict>=1.1',
+    ]
 
 setup(
     name="nucleon",

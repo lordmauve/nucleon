@@ -1,3 +1,4 @@
+import re
 import psycopg2
 
 from contextlib import contextmanager
@@ -5,8 +6,43 @@ from gevent.coros import Semaphore
 from gevent.queue import Queue, Empty
 
 
+def parse_database_url(url):
+    """Parse a database URL and return a dictionary.
+
+    If the database URL is not correctly formatted a ConfigurationError
+    will be raised. Individual parameters are available in the dictionary
+    that is returned.
+
+    """
+    regex = (
+        r'postgres://(?P<user>[^:]+):(?P<password>[^@]+)'
+        '@(?P<host>[\w.-]+)(?::(?P<port>\d+))?'
+        '/(?P<database>\w+)'
+    )
+    mo = re.match(regex, url)
+    if not mo:
+        msg = "Couldn't parse database connection string %s" % url
+        raise ValueError(msg)
+    params = mo.groupdict()
+    params['port'] = int(params['port'] or 5432)
+    return params
+
+
 class PostgresConnectionPool(object):
     """A pool of psycopg2 connections shared between multiple greenlets."""
+
+    @classmethod
+    def for_url(cls, url, initial=1, limit=20):
+        """Construct a connection pool instance given a URL."""
+        params = parse_database_url(url)
+        return cls(initial=initial, limit=limit, **params)
+
+    @classmethod
+    def for_name(cls, name, initial=1, limit=20):
+        """Construct a connection pool instance from the named setting."""
+        from ..config import settings
+        url = getattr(settings, name)
+        return cls.for_url(url, initial=initial, limit=limit)
 
     def __init__(self, initial=1, limit=20, **settings):
         """Construct a pool of connections.
