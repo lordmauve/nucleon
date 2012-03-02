@@ -33,8 +33,11 @@ def test_db_op():
 
 def test_initialise_database():
     """Test the initdb command gives us a usable database."""
-    syncdb()
     pgpool = app.app.get_database('database')
+    with pgpool.cursor() as c:
+        c.execute('DROP TABLE IF EXISTS test CASCADE;')
+
+    syncdb()
     with pgpool.cursor() as c:
         c.execute('SELECT name from test;')
         results = [r[0] for r in c.fetchall()]

@@ -134,10 +134,19 @@ COMMANDS = {
     'resetdb': ResetdbCommand,
 }
 
+
+def make_function(name, command_class):
+    def _call_command(*args):
+        cmd = command_class()
+        cmd(args)
+    _call_command.__doc__ == command_class.__doc__
+    _call_command.__name__ == name
+    return _call_command
+
 # create commands as global variables
 module = sys.modules[__name__]
 for command, command_class in COMMANDS.iteritems():
-    setattr(module, command, command_class)
+    setattr(module, command, make_function(command, command_class))
 
 
 

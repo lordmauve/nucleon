@@ -5,6 +5,7 @@ import imp
 
 from nucleon.config import settings, SETTINGS_FILENAME
 
+app = None
 
 def get_app(relpath=None):
     """Search for an load an application.
@@ -13,6 +14,9 @@ def get_app(relpath=None):
     current working directory.)
 
     """
+    global app
+    if app:
+        return app
 
     if relpath is None:
         relpath = os.getcwd()
