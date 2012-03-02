@@ -61,35 +61,13 @@ class Application(object):
     def get_config_string(self, name):
         return getattr(settings, name)
 
-    def _parse_database_url(self, url):
-        """Parse a database URL and return a dictionary.
-
-        If the database URL is not correctly formatted a ConfigurationError
-        will be raised. Individual parameters are available in the dictionary
-        that is returned.
-
-        """
-        regex = (
-            r'postgres://(?P<user>[^:]+):(?P<password>[^@]+)'
-            '@(?P<host>[\w-]+)(?::(?P<port>\d+))?'
-            '/(?P<database>\w+)'
-        )
-        mo = re.match(regex, url)
-        if not mo:
-            msg = "Couldn't parse database connection string %s" % url
-            raise ConfigurationError(msg)
-        params = mo.groupdict()
-        params['port'] = int(params['port'] or 5432)
-        return params
-
     def get_database(self, name='database'):
         """Return the database connection pool for a configuration name."""
         try:
             return self._dbs[name]
         except KeyError:
             dbstring = self.get_config_string(name)
-            params = self._parse_database_url(dbstring)
-            self._dbs[name] = PostgresConnectionPool(**params)
+            self._dbs[name] = PostgresConnectionPool.for_url(dbstring)
             return self._dbs[name]
 
     def get_amqp_pool(self, type="publish"):
