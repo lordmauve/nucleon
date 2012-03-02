@@ -1,3 +1,4 @@
+import datetime
 import json
 from webob import Response
 
@@ -14,13 +15,14 @@ class HttpException(Exception):
         """
         raise NotImplementedError()
 
+
 class Http404(HttpException):
     """
     A "not found" error that can be raised within views.
-    
+
     Http404 will be caught by Nucleon, and an HTTP 404 Not Found response
     served to the client.
-    
+
     """
     status_code = 404
 
@@ -45,6 +47,7 @@ class Http404(HttpException):
             msg['message'] = self.args
         resp = JsonResponse(msg, status=self.status_code)
         return resp
+
 
 class Http503(HttpException):
     """
@@ -103,20 +106,44 @@ class Http503(HttpException):
             resp = JsonResponse(msg, status=self.status_code)
         return resp
 
+
+def serialize_date_to_json(obj):
+    """Convert Python datetimes to ISO8601-compatible strings.
+
+    This function is suitable for serialising to JSON Python
+    datetime objects such as those retrieved from the DB API.
+
+    """
+    if isinstance(obj, datetime.datetime) or isinstance(obj, datetime.time):
+        return obj.replace(microsecond=0).isoformat()
+    elif isinstance(obj, datetime.date):
+        return obj.isoformat()
+    else:
+        raise TypeError("Cannot convert %s to JSON")
+
+
 class JsonResponse(Response):
-    """A response that converts its body to JSON."""
+    """A response that converts its body to JSON.
+
+    As a convenience to allow Python datetime types to be passed directly from
+    the database API to a JsonResponse, this class uses a JSON encoder that
+    will serialize these types in ISO8601 format.
+
+    """
     def __init__(self, obj, **kwargs):
         """Construct a JSON response.
 
         obj should be a structure of primitive Python types that can be
-        serialised as JSON (ie. using json.dumps).
+        serialised as JSON (ie. using json.dumps), or serialized with
+        serialize_date_to_json.
 
         """
         ps = {
             'content_type': 'application/json'
         }
         ps.update(kwargs)
-        super(JsonResponse, self).__init__(json.dumps(obj), **ps)
+        body = json.dumps(obj, default=serialize_date_to_json)
+        super(JsonResponse, self).__init__(body, **ps)
 
 
 class JsonErrorResponse(JsonResponse):
