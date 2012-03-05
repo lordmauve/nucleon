@@ -1,7 +1,7 @@
 from nose.tools import eq_
 from nucleon import tests
 
-from collections import Counter
+from collections import defaultdict
 from nucleon.signals import on_initialise, on_start, Signal
 
 
@@ -91,7 +91,7 @@ def test_signal_deregister_uid():
 def test_signal_deregister_reference():
     """Test that callbacks can be deregistered by reference"""
     s = Signal()
-    output = Counter()
+    output = defaultdict(int)
 
     def handler(x):
         output[x] += 1
