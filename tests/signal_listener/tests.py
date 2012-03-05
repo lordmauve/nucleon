@@ -33,10 +33,7 @@ class SubNucleon(object):
     - multiprocessing.Process just works
     """
     def __init__(self):
-        def starter():
-            nucleon_app = nucleon.commands.start()
-            nucleon_app()
-        self.sp = Process(target=starter)
+        self.sp = Process(target=nucleon.commands.start)
         self.sp.start()
 
     def sigusr1(self):
@@ -70,7 +67,7 @@ def get_page():
     t_end = time.time()
     t_delta = t_end - t_start
     assert t_delta >= 3
-    assert t_delta <= 3.5
+    assert t_delta <= 5
 
 
 def get_page_503():
