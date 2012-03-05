@@ -44,8 +44,7 @@ cov.start()
 #If both a testscript and an app exist, then run the test.
 for d in dirlist:
     if os.path.isdir(d) == True:
-        if os.path.exists(os.path.join(d, 'tests.py')) and \
-            os.path.exists(os.path.join(d, 'app.py')):
+        if os.path.exists(os.path.join(d, 'tests.py')):
 
             #Change into the directory of the module we are testing
             os.chdir(os.path.abspath(d))
