@@ -20,14 +20,14 @@ if sys.version_info < (2, 7):
 setup(
     name="nucleon",
     version=__version__,
+    url='https://docs.vertulabs.co.uk/nucleon/',
+    author='Vertu Infrastructure Development Team',
+    author_email='ops@vertulabs.co.uk',
     packages=find_packages(),
     entry_points={
         'console_scripts': [
             'nucleon = nucleon.commands:main',
         ]
-    },
-    package_data={
-        'nucleon': ['skel/*'],
     },
     install_requires=INSTALL_REQUIRES,
     dependency_links=[
