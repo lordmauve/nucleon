@@ -41,11 +41,21 @@ def test_select_with_keyword_params():
 
 
 @raises(TypeError)
-def test_select_with_insufficient_params():
+def test_select_with_keyword_and_positional_params():
+    """Test that selects reject mixed positional and keyword parameters"""
+    select_with_params(1, name='foo').rows
+
+
+@raises(TypeError)
+def test_select_with_insufficient_keyword_params():
     """Test that required parameters are validated."""
-    eq_(select_with_params(id='1').rows, [
-        {'id': 1, 'name': 'foo'}
-    ])
+    select_with_params(id='1').rows
+
+
+@raises(TypeError)
+def test_select_with_insufficient_positional_params():
+    """Test that required parameters are validated."""
+    select_with_params(1).rows
 
 
 def test_select_column():
@@ -68,12 +78,12 @@ def test_select_unique():
 
 
 @raises(NoResults)
-def test_select_unique():
+def test_select_unique_no_results():
     """Test that unique select raises an error if there are no results"""
     select_with_params(id='1', name='zap').unique
 
 
 @raises(MultipleResults)
-def test_select_unique():
+def test_select_unique_multiple_results():
     """Test that unique select raises an error if there are multiple results"""
     base_select().unique
