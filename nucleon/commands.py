@@ -42,18 +42,33 @@ class Command(object):
 
 
 class NewCommand(Command):
-    """Start a new nucleon app"""
-    # find skel directory
+    """Create a new nucleon app project"""
 
     def _configure_parser(self, parser):
         parser.add_argument('destination', type=str, help='a destination directory')
 
-    def __call__(self, args):
-        import shutil
+    def copy_recursive(self, dest, resource):
+        """Recursively copy files to dest from the pkg_resources resource."""
+        import posixpath
+        from pkg_resources import (resource_listdir, resource_string,
+            resource_isdir)
 
-        skel = os.path.join(os.path.dirname(__file__), 'skel')
+        try:
+            os.mkdir(dest)
+        except OSError, e:
+            sys.exit("Couldn't create directory %s: %s" % (dest, e.strerror))
+        for fname in resource_listdir(__name__, resource):
+            f = posixpath.join(resource, fname)
+            if resource_isdir(__name__, f):
+                self.copy_recursive(os.path.join(dest, fname), f)
+            else:
+                s = resource_string(__name__, f)
+                with open(os.path.join(dest, fname), 'w') as out:
+                    out.write(s)
+
+    def __call__(self, args):
         dest = args.destination
-        shutil.copytree(skel, dest)
+        self.copy_recursive(dest, 'skel')
         print "Created app", dest
 
 
@@ -136,18 +151,32 @@ COMMANDS = {
 
 
 def make_function(name, command_class):
+    """Make a callable function from a command class.
+
+    The resulting function should be called with functions matching the
+    commandline arguments. Thus if the commandline call was
+
+    $ nucleon start --port 8080
+
+    then the corresponding function call would be
+
+    >>> start('--port', '8080')
+
+    """
     def _call_command(*args):
         cmd = command_class()
-        cmd(args)
+        parser = cmd.get_parser()
+        arguments = parser.parse_args(args)
+        cmd(arguments)
     _call_command.__doc__ == command_class.__doc__
     _call_command.__name__ == name
     return _call_command
+
 
 # create commands as global variables
 module = sys.modules[__name__]
 for command, command_class in COMMANDS.iteritems():
     setattr(module, command, make_function(command, command_class))
-
 
 
 def main():
