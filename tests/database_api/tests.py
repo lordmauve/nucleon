@@ -1,7 +1,7 @@
 from nose.tools import eq_, raises
-from nucleon.tests import get_test_app
+from nucleon import tests
 from nucleon.database.api import NoResults, MultipleResults
-app = get_test_app(__file__)
+app = tests.get_test_app(__file__)
 
 from queries import (
     db, base_select, select_with_params, select_names,
@@ -14,7 +14,7 @@ sqlscript = sqlscript.make_reinitialize_script()
 
 def setup():
     for response in sqlscript.execute(db.get_pool()):
-        pass
+        print response
 
 
 def test_base_select():
