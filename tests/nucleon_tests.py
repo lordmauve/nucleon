@@ -20,9 +20,12 @@ thisdir = os.path.abspath(os.path.dirname(__file__))
 import nose
 from coverage import coverage
 from gevent.hub import get_hub
+import psycopg2.extensions
+
 
 def unload_nucleon():
     """Unload all nucleon code from sys.modules."""
+    psycopg2.extensions.set_wait_callback(None)
     get_hub().destroy()
     for k in sys.modules.keys():
         if k.split('.')[0] == 'nucleon':
