@@ -23,7 +23,7 @@ class ConfigurationError(AttributeError):
 
 class Settings(object):
     """A class to encapsulate settings in different environments.
-    
+
     Key to this class is the ability to read configuration from one specific
     environment.
 

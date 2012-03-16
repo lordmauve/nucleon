@@ -43,7 +43,7 @@ class Signal(object):
     def fire(self, *args, **kwargs):
         """Fire the signal.
 
-        The positional arguments args and keywork arguments kwargs are passed
+        The positional arguments args and keyword arguments kwargs are passed
         to each callback.
 
         This runs all of the callbacks one after the other, in the current

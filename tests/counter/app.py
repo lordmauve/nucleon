@@ -28,4 +28,7 @@ app = Application()
 @app.view('/')
 def version(request):
     """An example view that returns the version of the app."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warn('This is a basic application')
     return {'version': __version__}
