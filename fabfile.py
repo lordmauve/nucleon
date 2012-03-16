@@ -84,7 +84,7 @@ def run_nucleon_tests():
 
         with virtualenv('~/nucleon/NUCLEON_ENV'):
             # Install distribution and dependencies into virtualenv
-            run('pip install "nose>=1.1.2" "coverage>=3.5.1" pylint')
+            run('pip install "nose>=1.1.2" "coverage>=3.5.1" pylint mock')
             with cd('nucleon-%s' % version):
                 run('python setup.py develop')
 

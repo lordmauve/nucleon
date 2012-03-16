@@ -16,6 +16,11 @@ import nucleon.commands
 log = logging.getLogger(__name__)
 app = tests.get_test_app(__file__)
 
+current_dir = os.path.abspath(os.path.dirname(__file__))
+pidfile = os.path.join(current_dir, 'nucleon.pid')
+access_log = os.path.join(current_dir, 'access.log')
+error_log = os.path.join(current_dir, 'error.log')
+
 processes = []
 
 #TODO: to see failed asserts on gevent spawned functions please run as
@@ -59,7 +64,12 @@ class SubNucleon(object):
     - multiprocessing.Process just works
     """
     def __init__(self):
-        args = '--port', str(SERVER_PORT)
+        args = ('--port', str(SERVER_PORT),
+                 '--access_log', access_log,
+                 '--error_log', error_log,
+                 '--pidfile', pidfile,
+                 '--no_daemonise',
+                 )
         self.sp = Process(target=nucleon.commands.start, args=args)
         print >>sys.stderr, "Starting nucleon on port", SERVER_PORT
         self.sp.start()

@@ -53,7 +53,7 @@ for d in dirlist:
             unload_nucleon()
 
             #Run the nosetest with xunit enabled
-            args = ['nosetests', '-v', '-s',
+            args = ['nosetests', '-v', '-s', '--nologcapture',
             '--with-xunit', '--xunit-file', '../test_xunit_' + d + '.xml',
             ]
             nose.run(argv=args)

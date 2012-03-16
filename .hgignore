@@ -14,5 +14,6 @@ nucleon.egg-info/
 *~
 .idea/
 *.log
+*.xml
 tests/*.xml
 build/
