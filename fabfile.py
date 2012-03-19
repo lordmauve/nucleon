@@ -9,8 +9,8 @@ from fabric.contrib.files import exists
 from fabric.context_managers import prefix, settings
 
 
-@hosts('bruges.vertulabs.co.uk')
 @task
+@hosts('bruges.vertulabs.co.uk')
 def deploy_nucleondocs():
     """Generate nucleon docs and deploy to the docs webserver"""
 
@@ -27,8 +27,8 @@ def deploy_nucleondocs():
     sudo('chown -R docs:www-data ' + PATH)
 
 
-@runs_once
 @task
+@runs_once
 def build_nucleondocs():
     """Generate nucleon docs (uses Sphinx)"""
     path = join(dirname(__file__), 'docs')

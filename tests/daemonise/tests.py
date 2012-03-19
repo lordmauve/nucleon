@@ -1,4 +1,5 @@
 from nose.tools import eq_, with_setup
+import sys
 import os
 import os.path
 import urllib2
@@ -15,32 +16,46 @@ access_log = os.path.join(current_dir, 'access.log')
 error_log = os.path.join(current_dir, 'error.log')
 
 
+def kill_from_pidfile(pidfile):
+    """Kill a process whose pid is in pidfile.
+
+    Also waits for up to 10s for the process to stop, by polling /proc.
+    """
+    with open(pidfile, 'r') as pdfh:
+        pid = pdfh.read().strip()
+
+    if pid and os.path.exists('/proc/%s' % pid):
+        os.kill(int(pid), 2)
+
+        for i in xrange(10):
+            if not os.path.exists('/proc/%s' % pid):
+                break
+            sleep(1)
+        else:
+            os.kill(int(pid), 9)
+
+
 def setup():
     """Ensure pidfile does not exist. If it does, kill the process"""
     if os.path.exists(pidfile):
+        kill_from_pidfile(pidfile)
         os.unlink(pidfile)
-    if os.path.exists(error_log):
-        os.unlink(error_log)
+#    if os.path.exists(error_log):
+#        os.unlink(error_log)
 
 
 def teardown():
     """At the end of tests, try and kill nucleon and cleanup"""
     if os.path.exists(pidfile):
-        # kill nucleon process if its running
-        with open(pidfile, 'r') as pdfh:
-            pid = pdfh.read()
-
-            if pid and os.path.exists('/proc/%s' % pid):
-                os.kill(int(pid), 9)
-                sleep(1)
+        kill_from_pidfile(pidfile)
 
         # Ensure pidfile does not exist
         os.remove(pidfile)
         assert not os.path.exists(pidfile)
 
         # Lastly, test daemon is not running
-        if pid:
-            eq_(not os.path.exists('/proc/%s' % pid), True)
+#        if pid:
+#            eq_(not os.path.exists('/proc/%s' % pid), True)
 
 
 def check_daemon(pid, port='8888'):
@@ -77,12 +92,16 @@ def check_daemon(pid, port='8888'):
 def wait_for_pidfile():
     """Waits for the pidfile to be created for a maximum of 10 secs"""
     total_wait = 0
-    while not os.path.exists(pidfile):
-        sleep(0.2)
-        total_wait += 0.2
-        if total_wait >= 10:
-            break
-    assert total_wait < 10
+    while True:
+        sleep(1)
+        total_wait += 1
+        assert total_wait < 10, "pidfile (%s) wasn't written after 10s" % pidfile
+        try:
+            with open(pidfile, 'r') as f:
+                if f.read().strip():
+                    break
+        except OSError:
+            continue
 
 
 def kill_daemon(pid):
@@ -110,6 +129,7 @@ arguments = {
     # '--no_daemonise': False,
 }
 
+
 def args_list(args_dict):
     """Generate a list of arguments given a dictionary"""
     l = []
@@ -117,12 +137,13 @@ def args_list(args_dict):
         l += [k, v]
     return l
 
+
 @with_setup(setup, teardown)
 def test_app_daemonise():
     """Test that the app daemonises correctly"""
 
     # spawn nucleon and wait a moment for app to come up
-    os.system("nucleon start --pidfile=%s --access_log=%s --error_log=%s"\
+    os.system("nucleon start --port=7001 --pidfile=%s --access_log=%s --error_log=%s"\
             % (pidfile, access_log, error_log))
 
     # wait for pidfile to be written
@@ -133,7 +154,7 @@ def test_app_daemonise():
     assert int(pid)
 
     # check that the daemon is running
-    check_daemon(pid)
+    check_daemon(pid, port=7001)
 
     uid_name = getpwuid(os.getuid()).pw_name
     gid_name = getgrgid(os.getgid()).gr_name
@@ -152,20 +173,29 @@ def test_mock_root_change_user():
     """Test that daemonisation works correctly when started as root but run as different user"""
     # fork nucleon in a different process
     fork_pid = os.fork()
+
+    args = arguments.copy()
+    args.update({
+        '--port': '7002',
+    })
+
     if fork_pid == 0:
-        # child process to test daemonise
-        # mock the os library to return true when asked for root privileges
-        os.geteuid = Mock(return_value=0)
-        os.setuid = Mock(return_value=True)
-        os.setgid = Mock(return_value=True)
-        os.setgroups = Mock(return_value=True)
+        try:
+            # child process to test daemonise
+            # mock the os library to return true when asked for root privileges
+            os.geteuid = Mock(return_value=0)
+            os.setuid = Mock(return_value=True)
+            os.setgid = Mock(return_value=True)
+            os.setgroups = Mock(return_value=True)
 
-        # we create the access and error log in the current directory
-        # as the test process doesn't have access rights to /var/log, etc
-        args = args_list(arguments)
+            # we create the access and error log in the current directory
+            # as the test process doesn't have access rights to /var/log, etc
+            args = args_list(args)
 
-        import nucleon.commands
-        nucleon.commands.start(*args)
+            import nucleon.commands
+            nucleon.commands.start(*args)
+        finally:
+            os._exit(0)
     else:
         # parent test process
         # wait for child process to finish
@@ -179,7 +209,7 @@ def test_mock_root_change_user():
         assert int(pid)
 
         # check that the daemon is running
-        check_daemon(pid)
+        check_daemon(pid, port=7002)
 
         # kill daemon
         kill_daemon(pid)
@@ -201,23 +231,27 @@ def test_mock_root_running_as_root():
     # fork nucleon in a different process
     fork_pid = os.fork()
     if fork_pid == 0:
-        # child process to test daemonise
-        # mock the os library to return true when asked for root privileges
-        os.geteuid = Mock(return_value=0)
-        os.setuid = Mock(return_value=True)
-        os.setgid = Mock(return_value=True)
-        os.setgroups = Mock(return_value=True)
+        try:
+            # child process to test daemonise
+            # mock the os library to return true when asked for root privileges
+            os.geteuid = Mock(return_value=0)
+            os.setuid = Mock(return_value=True)
+            os.setgid = Mock(return_value=True)
+            os.setgroups = Mock(return_value=True)
 
-        # we create the access and error log in the current directory
-        # as the test process doesn't have access rights to /var/log, etc
-        import copy
-        args = copy.deepcopy(arguments)
-        args['--user'] = 'root'
-        args['--group'] = 'root'
-        args = args_list(args)
+            # we create the access and error log in the current directory
+            # as the test process doesn't have access rights to /var/log, etc
+            import copy
+            args = copy.deepcopy(arguments)
+            args['--user'] = 'root'
+            args['--group'] = 'root'
+            args['--port'] = '7003'
+            args = args_list(args)
 
-        import nucleon.commands
-        nucleon.commands.start(*args)
+            import nucleon.commands
+            nucleon.commands.start(*args)
+        finally:
+            os._exit(0)
     else:
         # parent test process
         # wait for child process to finish
@@ -231,7 +265,7 @@ def test_mock_root_running_as_root():
         assert int(pid)
 
         # check that the daemon is running
-        check_daemon(pid)
+        check_daemon(pid, port=7003)
         # kill daemon
         kill_daemon(pid)
 
@@ -252,26 +286,25 @@ def test_daemonise_not_root_change_user():
     # fork nucleon in a different process
     fork_pid = os.fork()
     if fork_pid == 0:
-        # child process to test daemonise
-        import copy
-        args = copy.deepcopy(arguments)
-        args['--user'] = 'nobody'
-        args['--group'] = 'nogroup'
-        args = args_list(args)
-
-        import nucleon.commands
-        # We should raise SystemExit in this case
-        # nose.tools.raises doesn't catch this as this in a child process
         try:
+            # child process to test daemonise
+            import copy
+            args = copy.deepcopy(arguments)
+            args['--user'] = 'nobody'
+            args['--group'] = 'nogroup'
+            args['--port'] = '7004'
+            args = args_list(args)
+
+            import nucleon.commands
             nucleon.commands.start(*args)
-        except SystemExit:
-            pass
+        finally:
+            os._exit(0)
     else:
         # parent test process
         # wait for child process to finish
         os.waitpid(fork_pid, 0)
         # wait for the fork #1 to raise error
-        sleep(0.5)
+        sleep(1)
 
         # test pidfile was not created
         assert not os.path.exists(pidfile)
