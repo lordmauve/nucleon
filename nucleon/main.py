@@ -20,6 +20,7 @@ import socket as python_socket
 
 logger = None
 
+
 def daemonise_nucleon(pidfile, uid_name, gid_name):
     """Perform the steps necessary to daemonise"""
     # if uid_name is not supplied, use the current user/group
@@ -52,7 +53,7 @@ def daemonise_nucleon(pidfile, uid_name, gid_name):
             # 177 = read and write for running user only
             os.umask(0177)
             pf = open(pidfile, 'w')
-        except:
+        except OSError:
             logger.error('Cannot open pidfile')
             sys.exit(1)
 
@@ -80,6 +81,9 @@ def daemonise_nucleon(pidfile, uid_name, gid_name):
         # if the current user doesn't have sudo permissions:
         # check if user is same, if not raise error
         if started_euid != running_uid:
+            if pf:
+                pf.close()
+                os.unlink(pidfile)
             logger.error('Need su permissions to change user')
             sys.exit(1)
 
@@ -95,6 +99,9 @@ def daemonise_nucleon(pidfile, uid_name, gid_name):
         if forked_pid != 0:
             os._exit(0)
     except OSError, e:
+        if pf:
+            pf.close()
+            os.unlink(pidfile)
         logger.error('fork #2 failed: %d (%s)' % (e.errno, e.strerror))
         sys.exit(1)
 
@@ -189,26 +196,30 @@ def serve(app, access_log, error_log, host, port,
 
         on_initialise.fire()
 
-        # daemonise and drop permissions
-        if not no_daemonise:
-            logger.debug('now daemonising')
-            daemonise_nucleon(pidfile, user, group)
-
-        # register signals on the newly created child process
-        register_signal(app, server, pidfile)
-
-        logger.info("Daemon started (pid: %s)" % str(os.getpid()))
-        logger.info("Listening on: %s:%s" % (host, port))
-        logger.info("Configuration used: %s" % settings.environment)
-
-        gevent.spawn_later(1, on_start.fire)
-
-        # serve requests
         try:
-            server.serve_forever(stop_timeout=5)
-        except:
-            app.stop_serving(timeout=HALT_TIMEOUT)
-            logger.exception('FATAL: Exception raised when serving')
+            # daemonise and drop permissions
+            if not no_daemonise:
+                logger.debug('now daemonising')
+                daemonise_nucleon(pidfile, user, group)
+
+            # register signals on the newly created child process
+            register_signal(app, server, pidfile)
+
+            logger.info("Daemon started (pid: %s)" % str(os.getpid()))
+            logger.info("Listening on: %s:%s" % (host, port))
+            logger.info("Configuration used: %s" % settings.environment)
+
+            gevent.spawn_later(1, on_start.fire)
+
+            # serve requests
+            try:
+                server.serve_forever(stop_timeout=5)
+            except:
+                app.stop_serving(timeout=HALT_TIMEOUT)
+                logger.exception('FATAL: Exception raised when serving')
+            finally:
+                logger.info('Finished serving. Now closing socket in pid: ' + str(os.getpid()))
+                listener_socket.close()
+                sys.exit(0)
         finally:
-            logger.info('Finished serving. Now closing socket in pid: ' + str(os.getpid()))
-            listener_socket.close()
+            sys.exit(0)
