@@ -2,7 +2,7 @@ import re
 import psycopg2
 
 from contextlib import contextmanager
-from gevent.coros import Semaphore
+from gevent.lock import Semaphore
 from gevent.queue import Queue, Empty
 
 

@@ -1,5 +1,5 @@
 import gevent
-from gevent.coros import RLock
+from gevent.lock import RLock
 from gevent.event import AsyncResult
 import logging
 import select
