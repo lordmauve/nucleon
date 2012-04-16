@@ -6,12 +6,15 @@ This module contains functions for patching gevent and psycopg2, and starting
 the Nucleon server.
 
 """
+import os
+
+#This is required for gevent v1.0b2
+os.environ['GEVENT_RESOLVER'] = 'ares'
 
 import gevent
 
 HALT_TIMEOUT = 10
 
-import os
 import pwd
 import grp
 import sys
