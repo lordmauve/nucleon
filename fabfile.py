@@ -19,12 +19,10 @@ def deploy_nucleondocs():
     build_nucleondocs()
 
     # Copy generated docs to docs_webserver on target machine
-    sudo('chown -R %s: %s' % (env.user, PATH))
     rsync_project(
         remote_dir=PATH,
         local_dir=join(dirname(__file__), 'docs/_build/html/'),
         delete=True)
-    sudo('chown -R docs:www-data ' + PATH)
 
 
 @task
