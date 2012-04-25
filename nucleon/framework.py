@@ -1,3 +1,4 @@
+import sys
 import re
 import os
 import gevent
@@ -11,6 +12,7 @@ from .util import WaitCounter
 from .config import settings, ConfigurationError
 
 import traceback
+
 
 __all__ = ['Application']
 
@@ -225,6 +227,7 @@ class Application(object):
                 resp = e.response(request)
             except:
                 tb = traceback.format_exc()
+                print >>sys.stderr, tb
                 resp = Response(tb, status=500, content_type='text/plain')
         return resp
 
