@@ -1,4 +1,7 @@
 import puka
+import gevent
+from gevent.lock import Semaphore
+from gevent.event import Event
 from gevent.queue import Queue
 from nucleon.amqp.connection import PukaConnection
 from contextlib import contextmanager
@@ -44,105 +47,46 @@ class DictEntryPool(object):
         self.pool = []
         self.amqp_url = amqp_url
         self.max_pool_size = size
-        self.next = 0
 
-        for x in xrange(size):
-            client = self._open_connection(amqp_url)
-            wrapped_client = PukaConnection(self, client)
-            self.pool.append(wrapped_client)
+        # Control creation of connections
+        self.sem = Semaphore(size)
+        self.conn_ready = Event()
 
-    def _open_connection(self, amqp_url):
-        """
-        Opens an AMQP connection (internal API).
+        self.next = -1
 
-        Arguments
+        # Open all connections, asynchronously for speed
+        cs = []
+        for i in xrange(self.max_pool_size):
+            cs.append(gevent.spawn(self.connection))
+        gevent.joinall(cs)
 
-        :amqp_url: configuration string for puka library (i.e.: amqp://user:pass@host:port/vhost)
-
-        Returns
-
-        :puka.Client:
-
-        """
-        client = puka.Client(amqp_url)
+    def _open_connection(self):
+        """Open an PukaConnection."""
+        client = puka.Client(self.amqp_url)
         promise = client.connect()
         client.wait(promise)
-        return client
+        wrapped_client = PukaConnection(self, client)
+        return wrapped_client
 
     def connection(self):
-        """
-        Get a connection from the connection pool.
-
-        Returns
-
-        :PukaConnection or None:
-
-        """
-        connection = self.pool[self.next]
-        # round-robin
-        if self.next == self.max_pool_size - 1:
-            self.next = 0
+        """Get a connection from the connection pool."""
+        if self.sem.acquire(blocking=False):
+            conn = self._open_connection()
+            self.pool.append(conn)
+            self.conn_ready.set()
         else:
-            self.next += 1
-        return connection
-        # if self.queue.qsize() < 1:
-        #     # if pool is empty create a new connection
-        #     wrapped_conn = PukaConnection(self,
-        #                     self._open_connection(self.amqp_url))
-        #     print 'Puka pool empty. creating new connection. ', wrapped_conn.conn
-        # else:
-        #     wrapped_conn = self.queue.get(block, timeout)
+            self.conn_ready.wait()
 
-        # try:
-        #     yield wrapped_conn
-        # except Exception as ex:
-        #     print 'Connection broken exception raised: ', traceback.format_exc()
-        #     try:
-        #         #let's try to kindly close the connection
-        #         promise = wrapped_conn.close()
-        #     except:
-        #         pass
+        # round-robin
+        self.next = (self.next + 1) % len(self.pool)
+        return self.pool[self.next]
 
-        #     #let's reinitialize connection
-        #     conn = self._open_connection(self.amqp_url)
-        #     wrapped_conn = PukaConnection(self, conn)
-        # finally:
-        #     print 'pool: putting back connection ', wrapped_conn.conn
-        #     self.put_back(wrapped_conn)
-
-
-    # def put_back(self, connection):
-    #     """
-    #     Puts back a connection into the pool, if the max_queue_size is not reached.
-    #     """
-    #     if self.queue.qsize() < self.max_queue_size:
-    #         self.queue.put(connection)
-    #     else:
-    #         print 'Queue full, so closing extra connection. ', connection.conn
-    #         try:
-    #             connection.close()
-    #         except:
-    #             pass
-
-    # def get_conn(self, block=True, timeout=None):
-    #     """
-    #     Deprecated. Use the connection() context manager instead.
-
-    #     Returns AMQP conenction.
-
-    #     Pulls connection object from pool and returns it. Unreferenced connection will eventually return to the pool.
-    #     Unless explicitly required please please refrain from usage
-    #     Recommended accessor is DictEntryPool.connection()
-
-    #     Arguments
-
-    #     :block: if True (default) will wait for available connection in the pool
-    #     :timeout: timeout when waiting for connection
-
-    #     Returns
-
-    #     :PukaConnection or None:
-
-    #     """
-    #     conn = self.queue.get(block,timeout)
-    #     return conn
+    def close(self):
+        """Close all connections in the pool."""
+        self.conn_ready.clear()
+        conns = self.pool
+        self.pool = []
+        for conn in conns:
+            conn.close()
+            self.sem.release()
+        self.next = 0

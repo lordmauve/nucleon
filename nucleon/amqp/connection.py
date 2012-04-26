@@ -1,8 +1,10 @@
 import gevent
 from gevent.lock import RLock
 from gevent.event import AsyncResult
+import gevent.hub
 import logging
 import select
+from functools import partial
 
 log = logging.getLogger(__name__)
 
@@ -12,139 +14,129 @@ def deprecated(func):
     return func
 
 
+class asyncmethod(object):
+    """Wrap a Puka method so that it can block if a callback is not given."""
+    def __init__(self, name, doc=None):
+        self.name = name
+        self.__doc__ = doc
+
+    def __get__(self, obj, type=None):
+        method = getattr(obj.conn, self.name)
+        return partial(
+            obj._run_with_callback,
+            method
+        )
+
+
 class PukaConnection(object):
+    """AMQP Connection wrapper.
+
+    Wraps the puka.Client API so that AMQP calls block, unless a callback is
+    specified. Also, the connection is wrapped with appropriate locking to
+    allow for the connection to be shared between multiple greenlets.
+
+    This class maintains two greenlets:
+
+    * The loop greenlet processes I/O.
+    * The dispatcher greenlet executes callbacks that have been scheduled for
+      when AMQP returns a result.
+
+    The dispatcher greenlet uses a system of "abdication" such that if it is
+    called to execute a blocking call on the same connection, it is allowed to
+    do so, but a new dispatcher is started in its place that will eventually
+    unblock it.
+
+    This class is intended to be created via
+    nucleon.Application.get_amqp_pool(), rather than directly.
+
     """
-    Puka Connection proxy wrapper
-    - provides sync and async wrappers for common functions
-    - assures connection reliability through locking
-    - async is provided as Greenlets
-    Don't initialize directly. Use nucleon.Application.get_amqp_pool()
-    """
+    num = 0
+
     def __init__(self, pool, conn):
         self.pool = pool
         self.conn = conn
         self.conn._loop_break = False
         self.lock = RLock()
-        print 'PukaConnection.__init__(): conn = ' + str(self.conn)
+        self.conn_id = PukaConnection.num = PukaConnection.num + 1
+        log.info('Starting new AMQP connection %d' % self.conn_id)
+
+        # self.running will contain the promises that are currently being
+        # dispatched. This is used to prevent them being re-dispatched if the
+        # dispatcher is replaced (because it needs to block)
+        self.running = set()
+
+        # Start an initial dispatcher
+        self.replace_dispatcher()
         self.greenlet = gevent.spawn(self.loop)
 
-    def _run_with_callback(self, method, callback=None, *args, **kwargs):
+    def _run_blocking(self, method, *args, **kwargs):
+        """Run an AMQP method and block until the result is ready."""
+        r = AsyncResult()
+
+        def temp_callback(p, res):
+            r.set(res)
+            promise = self.conn.promises.by_number(p)
+            promise.refcnt_inc()
+
+        with self.lock:
+            method(*args,
+                callback=temp_callback, **kwargs)
+
+        self.must_now_block()
+        return r.get()
+
+    def _run_with_callback(self, method, *args, **kwargs):
         """
         Internal method implements a generic pattern to perform sync and async
         calls to Puka. If callback is provided, it runs in async mode.
         """
-        if callback:
+        log.debug("%s *%r **%r", method.__name__, args, kwargs)
+        try:
+            callback = kwargs.pop('callback')
+        except KeyError:
+            return self._run_blocking(method, *args, **kwargs)
+        else:
             with self.lock:
                 return method(*args, callback=callback, **kwargs)
-
-        else:
-            print '_run_with_callback(): No callback. method =',\
-                method.__name__, ' self.conn = ', self.conn
-
-            r = AsyncResult()
-            with self.lock:
-                def temp_callback(p, res):
-                    print 'temp_callback called. p, res = ', p, res
-                    r.set(res)
-                    promise = self.conn.promises.by_number(p)
-                    promise.refcnt_inc()
-
-                method(*args,
-                    callback=temp_callback, **kwargs)
-            return r.get()
-
-    def publish(self, callback=None, *args, **kwargs):
-        """
-        Publish a message to AMQP.
-
-        Asynchronous mode:
-        Pass a callback function which will be called with the result of the
-        publish call.
-        """
-        return self._run_with_callback(method=self.conn.basic_publish,
-                    callback=callback, *args, **kwargs)
 
     def consume(self, callback=None, *args, **kwargs):
         """
         Register a consumer for an AMQP queue.
 
-        If callback is not provided, returns the result dictionary of the 
-        first message it receives in the queue.
+        If callback is not provided, returns the result dictionary of the first
+        message it receives in the queue.
 
         Asynchronous mode:
         If a callback function is provided, it runs the consume command returns
         the consume-promise only. The callback function will then be called
         with the result of the consume call.
         """
+        log.debug("consume *%r **%r", args, kwargs)
         if not callback:
             r = AsyncResult()
 
             def temp_callback(p, res):
-                print 'consume temp_callback called. p, res = ', p, res
-                # self.cancel(p)
+                log.debug('received %r', res)
                 r.set(res)
                 promise = self.conn.promises.by_number(p)
                 promise.refcnt_inc()
 
             with self.lock:
-                promise_number = self.conn.basic_get(
+                self.conn.basic_get(
                     callback=temp_callback, *args, **kwargs)
-                # promise_number = self.conn.basic_consume(
-                #     callback=temp_callback, prefetch_count=1, *args,**kwargs)
-                # print "Sync Promise", promise_number
 
+            self.must_now_block()
             result = r.get()
-            # self.cancel(result['promise_number'])
             return result
         else:
             def callback_wrapper(p, res):
+                log.debug('received %r', res)
                 callback(p, res)
-                promise = self.conn.promises.by_number(p)
-                promise.refcnt_inc()
 
             with self.lock:
-                consume_promise = self.conn.basic_consume(prefetch_count=1,
-                                    callback=callback, *args, **kwargs)
+                consume_promise = self.conn.basic_consume(
+                                    callback=callback_wrapper, *args, **kwargs)
             return consume_promise
-
-        # if callback:
-        #     assert callable(callback)
-        #     with self.lock:
-        #         consume_promise = self.conn.basic_consume(prefetch_count=1,
-        #             callback=callback, *args, **kwargs)
-        #         return consume_promise
-        # else:
-        #     r = AsyncResult()
-        #     with self.lock:
-        #         consume_promise = self.conn.basic_consume(prefetch_count=1,
-        #             callback=lambda p, res: r.set(res), *args, **kwargs)
-        #         return consume_promise
-
-        # def do_consume(self, *args, **kwargs):
-        #     with self.lock:
-        #         # Using basic_consume instead of basic_get as basic_get makes
-        #         # only one request and hence needs to constantly poll the
-        #         # RabbitMQ server.
-        #         #
-        #         # basic_consume on the other hand, registers the consumer with
-        #         # RabbitMQ which then calls back when there are new messages.
-        #         # prefetch_count = 1, ensures that one consumer only works with
-        #         # one message at a time
-        #         consume_promise = self.conn.basic_consume(prefetch_count=1,
-        #                             *args, **kwargs)
-        #         if 'callback' in kwargs and kwargs['callback']:
-        #             self.conn.loop()
-        #         return consume_promise
-
-        # response = None
-        # if callback:
-        #     assert callable(callback)
-        #     gthread = gevent.spawn(do_consume, self, *args,
-        #                     callback=callback, **kwargs)
-        #     #response = gthread.get()
-        # else:
-        #     response = do_consume(self, *args, **kwargs)
-        # return response
 
     def ack(self, received_result, *args, **kwargs):
         """
@@ -163,60 +155,94 @@ class PukaConnection(object):
             # is fixed.
             self.conn.needs_write()
 
-    def reject(self, received_result):
-        """
-        Reject a message received from an AMQP queue.
-        """
-        return self._run_with_callback(method=self.conn.basic_reject,
-                    msg_result=received_result)
+    exchange_declare = asyncmethod('exchange_declare')
+    exchange_delete = asyncmethod('exchange_delete')
+    exchange_bind = asyncmethod('exchange_bind')
+    exchange_unbind = asyncmethod('exchange_unbind')
 
-    def exchange_declare(self, exchange):
-        """
-        Declare an exchange synchronously
-        """
-        return self._run_with_callback(method=self.conn.exchange_declare,
-                    exchange=exchange)
+    queue_declare = asyncmethod('queue_declare')
+    queue_delete = asyncmethod('queue_delete')
+    queue_purge = asyncmethod('queue_purge')
+    queue_bind = asyncmethod('queue_bind')
+    queue_unbind = asyncmethod('queue_unbind')
 
-    def queue_declare(self, queue):
-        """
-        Declare a queue synchronously
-        """
-        return self._run_with_callback(method=self.conn.queue_declare,
-                    queue=queue)
-
-    def queue_bind(self, *args, **kwargs):
-        """
-        Bind a queue to an exchange synchronously
-        """
-        return self._run_with_callback(method=self.conn.queue_bind,
-                    *args, **kwargs)
-
-    def exchange_delete(self, exchange):
-        """
-        Delete an exchange synchronously
-        """
-        return self._run_with_callback(method=self.conn.exchange_delete,
-                    exchange=exchange)
-
-    def queue_delete(self, queue):
-        """
-        Delete a queue synchronously
-        """
-        return self._run_with_callback(method=self.conn.queue_delete,
-                    queue=queue)
-
-    def cancel(self, consume_promise):
-        """
-        Cancel a consumer from an AMQP queue.
-        """
-        return self._run_with_callback(method=self.conn.basic_cancel,
-                    consume_promise=consume_promise)
+    publish = asyncmethod('basic_publish')
+    cancel = asyncmethod('basic_cancel')
+    basic_publish = asyncmethod('basic_publish')
+    basic_cancel = asyncmethod('basic_cancel')
+    basic_get = asyncmethod('basic_get')
+    basic_reject = asyncmethod('basic_reject')
+    basic_qos = asyncmethod('basic_qos')
 
     def close(self):
-        print "Signalling loop to stop"
+        """Shut down the connection.
+
+        Shuts down the IO loop and dispatcher, and removes this connection from
+        its parent pool.
+
+        This method blocks until the connection is completely closed.
+
+        """
+        if self.conn._loop_break:
+            return
+        logging.info("Closing AMQP connection %d" % self.conn_id)
         self.conn._loop_break = True
-        self.greenlet.join()
+        gevent.joinall([self.greenlet, self.dispatcher])
         self.conn.close()
+        try:
+            self.pool.pool.remove(self)
+        except ValueError:
+            pass
+
+    def start_dispatcher(self):
+        """Dispatch callbacks, intended to be run as a separate greenlet.
+
+        Loops until the connection is closed or the current greenlet is no
+        longer the dispatcher. In the latter case, don't execute any more
+        callbacks, as they will be executed by the real dispatcher.
+
+        """
+        while not self.conn._loop_break:
+            for promise in (self.conn.promises.ready - self.running):
+                self.running.add(promise)
+                try:
+                    self.conn.promises.run_callback(promise,
+                        raise_errors=False)
+                finally:
+                    self.running.remove(promise)
+                if not self.current_is_dispatcher():
+                    # If the current greenlet has been replaced as the current
+                    # dispatcher, don't run any more callbacks
+                    return
+
+            # FIXME: block until notified. This would require us to wrap
+            # puka.promise.PromiseCollection with a Semaphore
+            gevent.sleep(0.05)
+
+    def must_now_block(self):
+        """Signal that something is about to block on this connection.
+
+        If the current greenlet is the dispatcher, we stop being so, and spawn
+        a new dispatcher to provide us with the result we need to unblock
+        ourselves.
+
+        """
+        if self.current_is_dispatcher():
+            self.replace_dispatcher()
+
+    def current_is_dispatcher(self):
+        """Return True if the calling greenlet is the dispatcher."""
+
+        return gevent.getcurrent() is self.dispatcher
+
+    def replace_dispatcher(self):
+        """Spawn a new dispatcher greenlet, replacing the current one.
+
+        This automatically triggers the old dispatcher to stop dispatching
+        after processing the current callback.
+
+        """
+        self.dispatcher = gevent.spawn(self.start_dispatcher)
 
     def loop(self):
         '''
@@ -228,12 +254,10 @@ class PukaConnection(object):
         '''
         conn = self.conn
 
-        td = 0.2
+        td = 0.05
         conn._loop_break = False
 
         while True:
-            conn.run_any_callbacks()
-
             if conn._loop_break:
                 break
 
