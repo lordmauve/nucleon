@@ -26,12 +26,16 @@ def amqp_setup():
 
 def amqp_teardown():
     log.debug("tear_down")
-    client = app.app.get_amqp_pool().connection()
+    pool = app.app.get_amqp_pool()
+    client = pool.connection()
     client.exchange_delete("unit_test_room")
-
     client.queue_delete(queue='listener1')
-
     client.queue_delete(queue='listener2')
+
+
+def teardown():
+    pool = app.app.get_amqp_pool()
+    pool.close()
 
 """
 Note message exchanges are registered at app.py
@@ -245,8 +249,7 @@ def test_async_publish_consume():
     recv_queue = Queue()
 
     def recv_callback(promise, result):
-        print 'test_async_publish_consume recv_callback called. result = ',\
-            result
+        log.debug('test_async_publish_consume recv_callback called. result = %r', result)
         recv_queue.put(result)
 
     get_message(conn, 'listener1', callback=recv_callback)
@@ -265,8 +268,7 @@ def test_async_multi_publish_consume():
     recv_queue = Queue()
 
     def recv_callback(promise, result):
-        print 'test_async_multi_publish_consume recv_callback result = ',\
-            result
+        log.debug('test_async_multi_publish_consume recv_callback result = %r', result)
         recv_queue.put(result)
 
     get_message(conn, 'listener1', callback=recv_callback)
@@ -319,16 +321,16 @@ def test_20_publish_async_get_async():
     recv_results_r2 = Queue()
 
     def sent_callback(promise, result):
-        print 'sent_callback called'
+        log.debug('sent_callback called')
         sent_results.put(result)
         log.debug("Received result %s" % result)
 
     def recv_callback_r1(promise, result):
-        print 'recv_callback_r1 called. result = ' + str(result)
+        log.debug('recv_callback_r1 called. result = %r', result)
         recv_results_r1.put(result)
 
     def recv_callback_r2(promise, result):
-        print 'recv_callback_r2 called. result = ' + str(result)
+        log.debug('recv_callback_r2 called. result = %r', result)
         recv_results_r2.put(result)
 
     message_body = 'HelloASync1'
@@ -369,11 +371,10 @@ def test_31_with_publish_get_async():
 
     def sent_callback(promise, result):
         sent_results.put(result)
-        print 'sent_callback called'
         log.debug("Received result %s" % result)
 
     def recv_callback(promise, result):
-        print 'recv_callback called. result = ' + str(result)
+        log.debug('recv_callback called. result = %s', result)
         recv_results.put(result)
 
     conn = app.app.get_amqp_pool().connection()
@@ -400,9 +401,7 @@ def test_31_with_publish_get_async():
     sent = sent_results.get()
     eq_(sent, {})
     eq_(recv['body'], "WithHello1 again")
-    print 'results matched'
     connR.ack(recv)
-
     connR.cancel(promise)
 
     assert sent_results.empty()
@@ -437,7 +436,7 @@ def test_multiple_publishers_same_connection():
     results = Queue()
 
     def recv_callback(promise, result):
-        print 'received result: ', result
+        log.debug('received result: %r', result)
         results.put(result)
         conn.ack(result)
 
@@ -477,24 +476,24 @@ def test_register_listener_api_method():
         for msg in messages:
             conn.publish(exchange="unit_test_room",
                 routing_key="user1", body=msg)
-            print 'Published message: ' + msg
+            log.debug('Published message: %r' % msg)
             time.sleep(0.1)
 
     def recv_callback(connection, promise, result):
-        print 'Result received: ' + result['body']
+        log.debug('Result received: %r', result['body'])
         received_queue.put(result['body'])
         connection.ack(result)
 
     app.app.register_and_spawn_amqp_listener('listener1', recv_callback)
 
-    print 'Now publishing'
+    log.debug('Now publishing')
     do_publish()
 
     received_messages = set()
     while len(received_messages) < 10:
         received_messages.add(received_queue.get())
     eq_(messages, received_messages)
-    print 'Finished test_register_listener_api_method'
+    log.debug('Finished test_register_listener_api_method')
 
 
 @with_setup(amqp_setup, amqp_teardown)
@@ -508,21 +507,21 @@ def test_multiple_listeners_api_method():
         for msg in messages:
             conn.publish(exchange="unit_test_room",
                 routing_key="user1", body=msg)
-            print 'Published message: ' + msg
+            log.debug('Published message: %r' % msg)
             time.sleep(0.1)
 
     def recv_callback1(connection, promise, result):
-        print 'First consumer received: ' + result['body']
+        log.debug('First consumer received: %r' % result['body'])
         received_queue.put(result['body'])
         connection.ack(result)
 
     def recv_callback2(connection, promise, result):
-        print 'Second consumer received: ' + result['body']
+        log.debug('Second consumer received: %r' % result['body'])
         received_queue.put(result['body'])
         connection.ack(result)
 
     def recv_callback3(connection, promise, result):
-        print 'Third consumer received: ' + result['body']
+        log.debug('Third consumer received: %r' % result['body'])
         received_queue.put(result['body'])
         connection.ack(result)
 
@@ -530,11 +529,74 @@ def test_multiple_listeners_api_method():
     app.app.register_and_spawn_amqp_listener('listener1', recv_callback2)
     app.app.register_and_spawn_amqp_listener('listener1', recv_callback3)
 
-    print 'Now publishing'
+    log.debug('Now publishing')
     do_publish()
 
     received_messages = set()
     while len(received_messages) < 10:
         received_messages.add(received_queue.get())
     eq_(messages, received_messages)
-    print 'Finished test_multiple_listeners_api_method'
+    log.debug('Finished test_multiple_listeners_api_method')
+
+
+@with_setup(amqp_setup, amqp_teardown)
+def test_callback_can_call_blocking_methods():
+    """Test that a callback can call blocking methods
+
+    The pitfall is that a callback is dispatched by a dispatcher greenlet, and
+    if that greenlet blocks waiting for a result from its own connection, it
+    won't be able to unblock itself.
+
+    Therefore in this test we do a blocking publish call from a callback.
+
+    Three messages are sent:
+
+    - initial: triggers the callback
+    - callback: causes the dispatcher to block holding the connection lock
+    - outer: publish a message, in order to wait for the connection lock
+
+    If callback blocks, outer will never complete. We give the whole test 5
+    seconds to complete - if it is not complete within this time, we consider
+    it hung.
+
+    """
+    pool = app.app.get_amqp_pool()
+    conn = pool.connection()
+
+    def publish(message):
+        """Publish helper - publish to the queue listener1."""
+        conn.publish(
+            exchange='unit_test_room',
+            routing_key='user1',
+            body=message
+        )
+
+    received = []
+
+    def callback(promise, result):
+        """In the callback, publish to our own connection."""
+        received.append(result['body'])
+        conn.ack(result)
+        if result['body'] != 'callback':
+            publish('callback')
+
+    timeout = gevent.Timeout(seconds=5)
+    try:
+        timeout.start()
+        conn.consume(queue='listener1', callback=callback)
+        publish('initial')
+        publish('outer')
+        outer_publisher = gevent.spawn_later(1, publish, 'outer')
+        outer_publisher.join()
+    except gevent.Timeout:
+        # We've deadlocked the connection - we should try to close it
+        # But it probably won't close - so we kill everything instead
+        gevent.killall([conn.dispatcher, conn.greenlet], block=True, timeout=2)
+        try:
+            pool.pool.remove(conn)
+        except Exception:
+            pass
+
+        raise AssertionError("Callback appears hung after 5 seconds.")
+
+    eq_(set(received), set(['initial', 'callback', 'outer']))

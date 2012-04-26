@@ -21,19 +21,22 @@ import nose
 from coverage import coverage
 from gevent.hub import get_hub
 import psycopg2.extensions
+import sys
 
 
 def unload_nucleon():
     """Unload all nucleon code from sys.modules."""
     psycopg2.extensions.set_wait_callback(None)
-    get_hub().destroy()
+    get_hub().destroy(destroy_loop=True)
     for k in sys.modules.keys():
         if k.split('.')[0] == 'nucleon':
             del(sys.modules[k])
 
 
 #Get a list of all the elements in the current directory
-dirlist = os.listdir(thisdir)
+dirlist = set(os.listdir(thisdir))
+if sys.argv[1:]:
+    dirlist = list(dirlist.intersection(sys.argv[1:]))
 
 #Start collecting coverage data
 cov = coverage(branch=True, source=nucleon.__path__)

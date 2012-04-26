@@ -3,7 +3,6 @@ import psycopg2
 
 from contextlib import contextmanager
 from gevent.lock import Semaphore
-from gevent.queue import Queue, Empty
 
 
 def parse_database_url(url):
