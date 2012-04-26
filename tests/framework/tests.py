@@ -69,3 +69,24 @@ def test_get_post_only_view():
     allowed_methods = set(re.split(r',\s*', resp.headers['Allow']))
     eq_(allowed_methods, set(['POST', 'PUT']))
     eq_(resp.body, '')
+
+
+# Tests for various response types
+
+
+def test_404():
+    """Test generating 404 responses with Http404"""
+    resp = app.get('/404', status=404)
+    eq_(resp.json, {
+        'error': 'NOT_FOUND',
+        'message': "This thing didn't exist"
+    })
+
+
+def test_400():
+    """Test generating 400 responses with JsonErrorResponse"""
+    resp = app.get('/400', status=400)
+    eq_(resp.json, {
+        'error': 'SOME_ERROR',
+        'message': 'Some message'
+    })
