@@ -24,7 +24,9 @@ class Http404(HttpException):
     served to the client.
 
     """
-    status_code = 404
+
+    def __init__(self, message):
+        super(Http404, self).__init__(message)
 
     def response(self, request):
         """
@@ -35,18 +37,12 @@ class Http404(HttpException):
             'error': 'NOT_FOUND',
             'message': 'argument passed to exception'
         }
-        {
-            'error': 'NOT_FOUND',
-            'message': ['argument1 passed to exception', 'argument 2', ...]
-        }
         """
-        msg = {'error': 'NOT_FOUND'}
-        if len(self.args) == 1:
-            msg['message'] = self.args[0]
-        elif len(self.args) > 1:
-            msg['message'] = self.args
-        resp = JsonResponse(msg, status=self.status_code)
-        return resp
+        msg = {
+            'error': 'NOT_FOUND',
+            'message': self.args[0]
+        }
+        return JsonResponse(msg, status=404)
 
 
 class Http503(HttpException):
@@ -119,7 +115,7 @@ def serialize_date_to_json(obj):
     elif isinstance(obj, datetime.date):
         return obj.isoformat()
     else:
-        raise TypeError("Cannot convert %s to JSON")
+        raise TypeError("Cannot convert %r to JSON" % obj)
 
 
 class JsonResponse(Response):
@@ -150,4 +146,3 @@ class JsonErrorResponse(JsonResponse):
     """An HTTP 400 error response with a JSON body."""
     def __init__(self, obj, **kwargs):
         super(JsonErrorResponse, self).__init__(obj, status=400, **kwargs)
-
