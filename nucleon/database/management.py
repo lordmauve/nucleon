@@ -71,7 +71,7 @@ class SQLScript(object):
         for c in self.commands:
             mo = CREATE_TABLE_RE.match(c)
             if mo:
-                cs.append('DROP TABLE IF EXISTS %s' % mo.group('table_name'))
+                cs.append('DROP TABLE IF EXISTS %s CASCADE' % mo.group('table_name'))
             cs.append(c)
         return SQLScript(cs)
 
