@@ -93,7 +93,7 @@ def run_nucleon_tests():
 
                 # Generate pylint report
                 with cd('nucleon-%s' % version):
-                    out = run('pylint --output-format=parseable nucleon')
+                    out = run('pylint --output-format=parseable --rcfile=../tests/pylint.rc nucleon')
 
     # Retrieve the results
     get('nucleon/tests/test_xunit_*', local_path='tests/')
