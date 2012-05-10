@@ -7,6 +7,9 @@ import signal
 from pwd import getpwuid
 from grp import getgrgid
 from time import sleep
+import json
+
+from gevent.pool import Pool
 
 from mock import Mock
 
@@ -25,14 +28,14 @@ def kill_from_pidfile(pidfile):
         pid = pdfh.read().strip()
 
     if pid and os.path.exists('/proc/%s' % pid):
-        os.kill(int(pid), 2)
+        os.kill(int(pid), 15)
 
         for i in xrange(10):
             if not os.path.exists('/proc/%s' % pid):
                 break
             sleep(1)
         else:
-            os.kill(int(pid), 9)
+            os.killpg(int(pid), 9)
 
 
 def setup():
@@ -92,15 +95,16 @@ def check_daemon(pid, port='8888'):
 def wait_for_pidfile():
     """Waits for the pidfile to be created for a maximum of 10 secs"""
     total_wait = 0
+    poll_freq = 0.5
     while True:
-        sleep(1)
-        total_wait += 1
+        sleep(poll_freq)
+        total_wait += poll_freq
         assert total_wait < 10, "pidfile (%s) wasn't written after 10s" % pidfile
         try:
             with open(pidfile, 'r') as f:
                 if f.read().strip():
                     break
-        except OSError:
+        except (IOError, OSError):
             continue
 
 
@@ -318,3 +322,49 @@ def test_daemonise_not_root_change_user():
                     error_message = True
                     break
         assert error_message
+
+
+def start_server(port=7001):
+    """Spawn the server on the given port, and wait for it to come up."""
+    os.system("nucleon start --port=%d --pidfile=%s --access_log=%s --error_log=%s"
+            % (port, pidfile, access_log, error_log))
+    wait_for_pidfile()
+    sleep(2)  # Wait for the app to become ready
+
+
+@with_setup(setup, teardown)
+def test_balancing():
+    """Test that multiple processes are accepting.
+
+    We query a specially crafted view that busy-waits to ensure requests are
+    load-balanced between all listening workers; the response contains process
+    details of the worker that served it.
+
+    """
+    results = {
+        'pgrps': set(),
+        'pids': set(),
+        'failures': 0,
+    }
+
+    start_server(port=7005)
+
+    def get_stat():
+        try:
+            resp = urllib2.urlopen('http://localhost:7005/slow-status')
+            r = json.load(resp)
+        except Exception:
+            results['failures'] += 1
+        else:
+            results['pgrps'].add(r['pgrp'])
+            results['pids'].add(r['pid'])
+
+    pool = Pool(size=20)
+    for i in xrange(16):
+        pool.spawn(get_stat)
+
+    pool.join(timeout=20, raise_error=True)
+
+    eq_(results['failures'], 0)
+    eq_(len(results['pids']), 4)
+    eq_(len(results['pgrps']), 1)
