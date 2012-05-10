@@ -102,20 +102,12 @@ class Application(object):
             AMQP queue name (remember to create one first)
         message_callback :
             callback function that will be executed on each receiver message
-            given following arguments
-            message_callback(connection, promise, message)
         type :
             name of a pool to take listener from (defaults to 'listen')
         """
-        def listener_callback(promise, message):
-            """
-            generic callback function that executes provided
-            message_callback(connection, promise, message)
-            """
-            message_callback(connection, promise, message)
 
         connection = self.get_amqp_pool(type=type).connection()
-        connection.consume(queue=queue, callback=listener_callback)
+        connection.consume(queue=queue, callback=message_callback)
         self._registered_amqp_listeners.append((connection, None))
         print "AMQP listener for queue %s" % queue
 
