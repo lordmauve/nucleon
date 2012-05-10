@@ -6,6 +6,9 @@ import logging
 import select
 from functools import partial
 
+from .message import Message
+
+
 log = logging.getLogger(__name__)
 
 
@@ -75,8 +78,6 @@ class PukaConnection(object):
 
         def temp_callback(p, res):
             r.set(res)
-            promise = self.conn.promises.by_number(p)
-            promise.refcnt_inc()
 
         with self.lock:
             method(*args,
@@ -116,10 +117,10 @@ class PukaConnection(object):
             r = AsyncResult()
 
             def temp_callback(p, res):
-                log.debug('received %r', res)
-                r.set(res)
-                promise = self.conn.promises.by_number(p)
-                promise.refcnt_inc()
+                if 'body' in res:
+                    msg = Message(self, res)
+                    log.debug('received %r', msg)
+                    r.set(msg)
 
             with self.lock:
                 self.conn.basic_get(
@@ -130,8 +131,10 @@ class PukaConnection(object):
             return result
         else:
             def callback_wrapper(p, res):
-                log.debug('received %r', res)
-                callback(p, res)
+                if 'body' in res:
+                    msg = Message(self, res)
+                    log.debug('received %r', msg)
+                    callback(msg)
 
             with self.lock:
                 consume_promise = self.conn.basic_consume(
@@ -206,8 +209,16 @@ class PukaConnection(object):
             for promise in (self.conn.promises.ready - self.running):
                 self.running.add(promise)
                 try:
+                    # Really need raise_errors=True, but they get raised here,
+                    # not in the callback.
+                    #
+                    # It would be nice if errors were raised in the blocked
+                    # thread ie. by using AsyncResult.set_exception()
                     self.conn.promises.run_callback(promise,
                         raise_errors=False)
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
                 finally:
                     self.running.remove(promise)
                 if not self.current_is_dispatcher():
@@ -297,5 +308,4 @@ class PukaConnection(object):
         """
         Cleanly close connections at the end.
         """
-        print '__del__ called'
         self.close()
