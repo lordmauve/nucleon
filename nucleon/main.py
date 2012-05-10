@@ -12,16 +12,23 @@ import os
 os.environ['GEVENT_RESOLVER'] = 'ares'
 
 import gevent
-
-HALT_TIMEOUT = 10
-
+import signal
 import pwd
 import grp
 import sys
 import logging
+import struct
 import socket as python_socket
 
-logger = None
+from gevent.socket import socket as gevent_socket
+from gevent.pywsgi import WSGIServer
+
+from .signals import on_initialise, on_start, Signal
+from .config import settings
+
+
+HALT_TIMEOUT = 10
+logger = logging.getLogger(__name__)
 
 
 def daemonise_nucleon(pidfile, uid_name, gid_name):
@@ -112,6 +119,7 @@ def daemonise_nucleon(pidfile, uid_name, gid_name):
     if pf:
         pf.write(str(os.getpid()))
         pf.close()
+        del(pf)
 
     sys.stdout.flush()
     sys.stderr.flush()
@@ -123,21 +131,6 @@ def daemonise_nucleon(pidfile, uid_name, gid_name):
     os.dup2(si.fileno(), sys.stdin.fileno())
     os.dup2(so.fileno(), sys.stdout.fileno())
     os.dup2(se.fileno(), sys.stderr.fileno())
-
-def finish_serving(app, server):
-    logger.info("Shutting down server...")
-    app.stop_serving(timeout=HALT_TIMEOUT)
-    server.stop()
-    logger.info("Shutdown complete!")
-
-def register_signal(app, server, pidfile):
-    import signal
-
-    def signal_handler():
-        logger.info('Signal raised')
-        finish_serving(app, server)
-    gevent.signal(signal.SIGUSR1, signal_handler)
-    gevent.signal(signal.SIGTERM, signal_handler)
 
 
 def bootstrap_gevent():
@@ -153,12 +146,6 @@ def bootstrap_gevent():
 def serve(app, access_log, error_log, host, port,
         user, group, no_daemonise, pidfile):
     """Start the server. Does not return."""
-    global logger
-    from gevent.pywsgi import WSGIServer
-    from gevent.socket import socket as gevent_socket
-    from nucleon.signals import on_initialise, on_start
-    from nucleon.config import settings
-
     # create the log directory if it doesn't already exist
     if os.path.dirname(access_log) and\
         not os.path.exists(os.path.dirname(access_log)):
@@ -172,32 +159,27 @@ def serve(app, access_log, error_log, host, port,
         logging.basicConfig(
             filename=error_log,
             level=level,
-            format="%(asctime)s:%(levelname)s:%(name)s:%(message)s",
+            format="%(asctime)s [%(process)s] %(name)s.%(levelname)s: %(message)s",
             )
-        logger = logging.getLogger(__name__)
-        logger.info('setup logging for pid: ' + str(os.getpid()))
 
         # setup a listener socket before dropping permissions
         try:
             listener_socket = gevent_socket()
-            # listener_socket.setsockopt(python_socket.SOL_SOCKET, python_socket.SO_REUSEADDR, 1)
 
             # set the listener socket to not linger after it is closed
             # by all processes
-            import struct
             listener_socket.setsockopt(python_socket.SOL_SOCKET,
                 python_socket.SO_LINGER, struct.pack('ii', 1, 0))
 
             listener_socket.bind((host, port))
-            listener_socket.listen(2)
+            listener_socket.listen(5)
         except python_socket.error:
             logger.exception("Can't connect to %s:%s" % (host, port))
             sys.exit(1)
 
         # create a WSGIServer instance using the listener socket created
         server = WSGIServer(listener_socket, app, log=f)
-
-        on_initialise.fire()
+        logger.info("Listening on: %s:%s" % (host, port))
 
         try:
             # daemonise and drop permissions
@@ -205,24 +187,139 @@ def serve(app, access_log, error_log, host, port,
                 logger.debug('now daemonising')
                 daemonise_nucleon(pidfile, user, group)
 
-            # register signals on the newly created child process
-            register_signal(app, server, pidfile)
-
-            logger.info("Daemon started (pid: %s)" % str(os.getpid()))
             logger.info("Listening on: %s:%s" % (host, port))
             logger.info("Configuration used: %s" % settings.environment)
 
-            gevent.spawn_later(1, on_start.fire)
-
-            # serve requests
-            try:
-                server.serve_forever(stop_timeout=5)
-            except:
-                app.stop_serving(timeout=HALT_TIMEOUT)
-                logger.exception('FATAL: Exception raised when serving')
-            finally:
-                logger.info('Finished serving. Now closing socket in pid: ' + str(os.getpid()))
-                listener_socket.close()
-                sys.exit(0)
+            d = MultiprocessDaemon(webserver_serve, app, server)
+            d.at_exit.connect(listener_socket.close)
+            d.start()
         finally:
             sys.exit(0)
+
+
+def log_exception(prefix):
+    """Print an exception to the log in a parseable way."""
+    import sys
+    import traceback
+    try:
+        class_, e, tb = sys.exc_info()
+        indent = ' ' * 4
+        tb = traceback.format_tb(tb)
+        lines = []
+        for l in tb:
+            lines.extend(l.rstrip().splitlines())
+        tb = indent + ('\n' + indent).join(lines)
+        logger.error('%s: %s: %s\n%s' % (
+            prefix,
+            class_.__name__,
+            e,
+            tb
+        ))
+    except Exception:
+        logger.error("Error formatting traceback: " + traceback.format_exc())
+
+
+def webserver_serve(app, server):
+    """Serve app with server.
+
+    This sets up process context, including signal handlers, etc,
+    and runs until signalled.
+
+    """
+    def signal_handler():
+        logger.info('Shutting down.')
+        app.stop_serving(timeout=HALT_TIMEOUT)
+        server.stop()
+        logger.info('Stopped.')
+
+    gevent.signal(signal.SIGUSR1, signal_handler)
+    gevent.signal(signal.SIGHUP, signal_handler)
+    gevent.signal(signal.SIGTERM, signal_handler)
+
+    on_initialise.fire()
+    gevent.spawn_later(1, on_start.fire)
+
+    # serve requests
+    try:
+        server.serve_forever(stop_timeout=5)
+    finally:
+        app.stop_serving(timeout=HALT_TIMEOUT)
+
+
+class MultiprocessDaemon(object):
+    """A daemon that forks multiple workers and keeps them alive.
+
+    Each worker will perform the callable given in the constructor.
+
+    """
+    def __init__(self, worker, *args, **kwargs):
+        self.workers = set()
+        self.worker = worker
+        self.args = args
+        self.kwargs = kwargs
+
+        self.at_exit = Signal()
+
+    def start(self, processes=4):
+        """Spawn a number of worker process and keep them alive.
+
+        Does not return.
+
+        """
+        # gevent.signal() doesn't work - presumably because the master is
+        # usually blocked in os.wait()
+        signal.signal(signal.SIGUSR1, self.signal_handler)
+        signal.signal(signal.SIGTERM, self.signal_handler)
+
+        os.setpgid(os.getpid(), 0)  # Create a process group
+        try:
+            self.keeprunning = True
+            for proc in xrange(processes):
+                self.spawn_worker()
+
+            while self.workers:
+                pid, sig = os.wait()   # Block until a child dies
+                if pid in self.workers:
+                    self.workers.remove(pid)
+                    if not self.keeprunning:
+                        # Don't respawn if we're shutting down
+                        continue
+                    logging.info("Worker process exited. Respawning.")
+                    self.spawn_worker()
+            self.at_exit.fire()
+        except Exception:
+            log_exception("Fatal exception in control process")
+            sys.exit(1)
+        sys.exit(0)
+
+    def stop(self):
+        """Stop the daemon and all workers."""
+        self.keeprunning = False
+        for pid in self.workers:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+    def spawn_worker(self):
+        """Spawn a new worker."""
+        pid = os.fork()
+        if pid:
+            # This is the parent process
+            self.workers.add(pid)
+            os.setpgid(pid, os.getpid())  # Add child to our process group
+        else:
+            logger.info("Worker started")
+            try:
+                self.worker(*self.args, **self.kwargs)
+            except Exception:
+                log_exception('Fatal exception in worker')
+                sys.exit(1)
+            except SystemExit:
+                pass
+            sys.exit(0)
+
+    def signal_handler(self, sig=None, frame=None):
+        """Handle a shutdown signal by shutting down the workers."""
+        logger.info("Caught signal %d, shutting down workers." % sig)
+        self.stop()
