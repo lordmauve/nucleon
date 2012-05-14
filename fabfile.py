@@ -14,23 +14,11 @@ from fabric.context_managers import prefix, settings
 def deploy_nucleondocs():
     """Generate nucleon docs and deploy to the docs webserver"""
 
-    PATH = '/srv/docs_webserver/docs/nucleon/'
-
-    build_nucleondocs()
-
     # Copy generated docs to docs_webserver on target machine
     rsync_project(
-        remote_dir=PATH,
+        remote_dir= '/srv/docs_webserver/docs/nucleon/'
         local_dir=join(dirname(__file__), 'docs/_build/html/'),
         delete=True)
-
-
-@task
-@runs_once
-def build_nucleondocs():
-    """Generate nucleon docs (uses Sphinx)"""
-    path = join(dirname(__file__), 'docs')
-    local('cd %s && make html' % path)
 
 
 @contextmanager
@@ -100,3 +88,31 @@ def run_nucleon_tests():
     get('nucleon/tests/coverage.xml', local_path='tests/')
     with open('tests/pylint.report', 'w') as f:
         f.write(out)
+
+
+    # Check whether the tests pass. 
+    # If they do, then build the sphinx docs and copy
+    # them back to the jenkins server
+
+    with virtualenv('~/nucleon/NUCLEON_ENV'):
+        # Install distribution and dependencies into virtualenv
+        run('pip install "BeautifulSoup" "sphinx"')
+        with cd('nucleon/tests'):
+            with settings(warn_only=True):
+                all_tests_pass =  run('python check_nucleon_tests.py')
+
+    if all_tests_pass == 'True':
+        # Copy docs to remote machine
+        rsync_project(
+        remote_dir='nucleon/docs',
+        local_dir=abspath(dirname(__file__)) + '/docs/',
+        delete=True,
+        exclude=RSYNC_EXCLUSIONS)
+
+        with virtualenv('~/nucleon/NUCLEON_ENV'):
+            with cd('nucleon/docs'):
+                run('make html')
+
+        #Copy the docs back to the jenkins server
+        get('nucleon/docs/_build', local_path='docs')
+
