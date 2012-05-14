@@ -16,7 +16,7 @@ def deploy_nucleondocs():
 
     # Copy generated docs to docs_webserver on target machine
     rsync_project(
-        remote_dir= '/srv/docs_webserver/docs/nucleon/'
+        remote_dir= '/srv/docs_webserver/docs/nucleon/',
         local_dir=join(dirname(__file__), 'docs/_build/html/'),
         delete=True)
 
