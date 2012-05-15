@@ -165,12 +165,6 @@ def serve(app, access_log, error_log, host, port,
         # setup a listener socket before dropping permissions
         try:
             listener_socket = gevent_socket()
-
-            # set the listener socket to not linger after it is closed
-            # by all processes
-            listener_socket.setsockopt(python_socket.SOL_SOCKET,
-                python_socket.SO_LINGER, struct.pack('ii', 1, 0))
-
             listener_socket.bind((host, port))
             listener_socket.listen(5)
         except python_socket.error:

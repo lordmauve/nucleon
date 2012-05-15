@@ -29,6 +29,9 @@ setup(
             'nucleon = nucleon.commands:main',
         ]
     },
+    package_data={
+        'nucleon': ['skel/*'],
+    },
     install_requires=INSTALL_REQUIRES,
     dependency_links=[
         'http://code.google.com/p/gevent/downloads/list',
