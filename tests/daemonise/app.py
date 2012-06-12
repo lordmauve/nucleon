@@ -16,7 +16,7 @@ def status(request):
 @app.view('/slow-status')
 def slow_status(request):
     s = time.time()
-    while time.time() - s < 0.5:
+    while time.time() - s < 0.2:
         """Busy loop to slow gevent's ability to accept().
 
         Any gevent-patched blocking function will allow the server to

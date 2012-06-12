@@ -360,11 +360,11 @@ def test_balancing():
             results['pids'].add(r['pid'])
 
     pool = Pool(size=20)
-    for i in xrange(16):
+    for i in xrange(50):
         pool.spawn(get_stat)
 
     pool.join(timeout=20, raise_error=True)
 
     eq_(results['failures'], 0)
-    eq_(len(results['pids']), 4)
+    assert len(results['pids']) > 1
     eq_(len(results['pgrps']), 1)
