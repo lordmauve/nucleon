@@ -8,6 +8,7 @@ with accounts as defined in app.cfg.
 from nose.tools import eq_
 from nucleon import tests
 from nucleon.commands import syncdb, resetdb
+from nucleon.database import PostgresConnectionPool, ConnectionFailed
 
 app = tests.get_test_app(__file__)
 
@@ -29,6 +30,20 @@ def test_db_op():
     """Test that a database query works."""
     resp = app.get('/2')
     eq_(resp.json['x^2'], 4)
+
+
+def test_invalid_connection_settings():
+    """Invalid connection settings cause an appropriate error to be raised."""
+    invalid_db = 'postgres://asf:123131@localhost/banaoakj'
+    try:
+        PostgresConnectionPool.for_url(invalid_db)
+    except ConnectionFailed as e:
+        eq_(e.args[0], 'Failed to connect to %s' % invalid_db)
+        return
+    except Exception as e:
+        raise AssertionError("Exception raised was %r" % e)
+    else:
+        raise AssertionError("No exception raised on invalid connection")
 
 
 def test_initialise_database():
@@ -84,6 +99,6 @@ def test_reinitialise_database_with_dependencies():
         c.execute('SELECT * from test2;')
         all = c.fetchall()
         test2_ids = [r[0] for r in all]
-        eq_(len(test2_ids), 1)        
+        eq_(len(test2_ids), 1)
         eq_(ids[-1], test2_ids[0])
 
