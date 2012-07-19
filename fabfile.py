@@ -90,13 +90,13 @@ def run_nucleon_tests():
         f.write(out)
 
 
-    # Check whether the tests pass. 
+    # Check whether the tests pass.
     # If they do, then build the sphinx docs and copy
     # them back to the jenkins server
 
     with virtualenv('~/nucleon/NUCLEON_ENV'):
         # Install distribution and dependencies into virtualenv
-        run('pip install "BeautifulSoup" "sphinx"')
+        run('pip install "sphinx"')
         with cd('nucleon/tests'):
             with settings(warn_only=True):
                 all_tests_pass =  run('python check_nucleon_tests.py')
