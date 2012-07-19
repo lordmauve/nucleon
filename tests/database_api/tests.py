@@ -1,3 +1,5 @@
+import sys
+from cStringIO import StringIO
 from nose.tools import eq_, raises
 from nucleon import tests
 from nucleon.database.api import NoResults, MultipleResults
@@ -9,12 +11,17 @@ from queries import (
 
 
 sqlscript = app.app.load_sql('database.sql')
-sqlscript = sqlscript.make_reinitialize_script()
 
 
 def setup():
-    for response in sqlscript.execute(db.get_pool()):
-        print response
+    pool = db.get_pool()
+    reset = sqlscript.make_reinitialize_script(pool)
+    out = StringIO()
+    try:
+        reset.execute(pool, out)
+    except Exception:
+        print out.getvalue()
+        raise
 
 
 def test_base_select():

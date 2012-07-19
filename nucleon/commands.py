@@ -7,6 +7,7 @@ import sys
 import os.path
 import argparse
 
+
 class Command(object):
     """
     Protocol definition for Commands.
@@ -138,10 +139,10 @@ class StartCommand(AppCommand):
     def __call__(self, args=None):
         from nucleon.main import serve
         def param(name):
-            """Get an argument if passed or else get it from defaults""" 
+            """Get an argument if passed or else get it from defaults"""
             if args and hasattr(args, name):
                 return getattr(args, name)
-            else: 
+            else:
                 return self.DEFAULTS[name]
 
         # Setup the defaults
@@ -170,8 +171,7 @@ class SyncdbCommand(AppCommand):
         sqlscript = app.load_sql('database.sql')
         db = app.get_database()
         sqlscript = sqlscript.make_sync_script(db)
-        for response in sqlscript.execute(db):
-            print response
+        sqlscript.execute(db, sys.stdout)
 
 
 class ResetdbCommand(AppCommand):
@@ -180,11 +180,9 @@ class ResetdbCommand(AppCommand):
     def __call__(self, args):
         app = self.get_app(args)
         sqlscript = app.load_sql('database.sql')
-        sqlscript = sqlscript.make_reinitialize_script()
         db = app.get_database()
-
-        for response in sqlscript.execute(db):
-            print response
+        sqlscript = sqlscript.make_reinitialize_script(db)
+        sqlscript.execute(db, sys.stdout)
 
 
 COMMANDS = {
