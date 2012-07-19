@@ -128,6 +128,7 @@ class PostgresConnectionPool(object):
             conn.commit()
         finally:
             if conn is not None:
+                conn.reset()
                 self.pool.append(conn)
             self.sem.release()
 
