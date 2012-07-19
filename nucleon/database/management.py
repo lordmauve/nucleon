@@ -176,7 +176,7 @@ class SQLScript(object):
                 try:
                     cursor.execute(command)
                     conn.commit()
-                except:
+                except Exception:
                     if isatty:
                         out.write('\033[31m' + command + ';\033[0m\n')
                     else:
