@@ -107,16 +107,15 @@ class SQLScript(object):
                 AND pg_catalog.pg_table_is_visible(c.oid)
         """)
 
-    def make_reinitialize_script(self, db):
+    def make_reinitialize_script(self):
         """Return a script that completely re-initialises a database."""
-        seqs = self._get_existing_sequences(db)
         cs = []
         # We probably don't need to drop indexes as they will be removed by the
         # cascading deletion of their table
         ctypes = [
             (CREATE_TABLE_RE, lambda mo: 'DROP TABLE IF EXISTS %s CASCADE' % mo.group('table_name')),
             (CREATE_TYPE_RE, lambda mo: 'DROP TYPE IF EXISTS %s CASCADE' % mo.group('type_name')),
-            (CREATE_SEQUENCE_RE, lambda mo: 'DROP SEQUENCE %s CASCADE' % mo.group('sequence_name') if mo.group('sequence_name') in seqs else None),
+            (CREATE_SEQUENCE_RE, lambda mo: 'DROP SEQUENCE IF EXISTS %s CASCADE' % mo.group('sequence_name')),
         ]
         for c in self.commands:
             for regex, mapfunc in ctypes:

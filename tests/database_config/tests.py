@@ -47,7 +47,7 @@ def test_invalid_connection_settings():
 
 
 def test_initialise_database():
-    """Test the initdb command gives us a usable database."""
+    """Test the syncdb command gives us a usable database."""
     pgpool = app.app.get_database('database')
     with pgpool.cursor() as c:
         c.execute('DROP TABLE IF EXISTS test CASCADE;')
@@ -60,7 +60,7 @@ def test_initialise_database():
 
 
 def test_reinitialise_database():
-    """Test that the initdb command restores the database completely."""
+    """Test that the resetdb command restores the database completely."""
     syncdb()
     pgpool = app.app.get_database('database')
     with pgpool.connection() as conn:
@@ -78,7 +78,7 @@ def test_reinitialise_database():
 
 def test_reinitialise_database_with_dependencies():
     """Test that the resetdb command restores the database and all
-       of it's dependencies completely"""
+       of its dependencies completely"""
     syncdb()
     pgpool = app.app.get_database('database')
     with pgpool.connection() as conn:

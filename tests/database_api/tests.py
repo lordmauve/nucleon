@@ -23,7 +23,7 @@ sqlscript = app.app.load_sql('database.sql')
 
 def setup():
     pool = db.get_pool()
-    reset = sqlscript.make_reinitialize_script(pool)
+    reset = sqlscript.make_reinitialize_script()
     out = StringIO()
     try:
         reset.execute(pool, out)

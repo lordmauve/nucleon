@@ -1,9 +1,0 @@
-gevent
-psycopg2
-#psyco_gevent (https://bitbucket.org/dvarrazzo/psycogreen/overview)
-WebOb
-httplib2
-lettuce
-Sphinx
-sphinxcontrib-httpdomain
--e git+https://github.com/gonsuke/gevent-memcache.git#egg=gevent-memcache
