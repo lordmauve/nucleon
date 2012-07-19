@@ -181,7 +181,7 @@ class ResetdbCommand(AppCommand):
         app = self.get_app(args)
         sqlscript = app.load_sql('database.sql')
         db = app.get_database()
-        sqlscript = sqlscript.make_reinitialize_script(db)
+        sqlscript = sqlscript.make_reinitialize_script()
         sqlscript.execute(db, sys.stdout)
 
 
