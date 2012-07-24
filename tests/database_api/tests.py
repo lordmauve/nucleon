@@ -1,6 +1,5 @@
 import sys
 import time
-import thread
 from cStringIO import StringIO
 from nose.tools import eq_, raises, with_setup
 from nucleon import tests
@@ -15,7 +14,8 @@ app = tests.get_test_app(__file__)
 from queries import (
     db, base_select, select_with_params, select_names,
     select_with_positional_params, simple_insert,
-    do_insert, insert_with_id, slow_insert, retryable_transaction)
+    do_insert, insert_with_id, slow_insert, retryable_transaction,
+    simple_update, simple_delete)
 
 
 sqlscript = app.app.load_sql('database.sql')
@@ -84,12 +84,34 @@ def test_select_column_invalid():
     base_select().flat
 
 
+@with_setup(setup)
 def test_select_unique():
     """Test that it is possible to select a single row as a dict"""
     eq_(select_with_params(id='1', name='foo').unique, {
         'id': 1,
         'name': 'foo',
     })
+
+
+@with_setup(setup)
+def test_update():
+    """We can update and receive a row count."""
+    res = simple_update(old='foo', new='woo')
+    eq_(select_with_params(id='1', name='woo').unique, {
+        'id': 1,
+        'name': 'woo',
+    })
+    eq_(res, 1)
+    eq_(simple_update(old='foo', new='woo'), 0)
+
+
+@with_setup(setup)
+def test_delete():
+    """We can delete and receive a row count."""
+    res = simple_delete(name='foo')
+    eq_(select_with_params(id='1', name='foo').rows, [])
+    eq_(res, 1)
+    eq_(simple_delete(name='foo'), 0)
 
 
 @raises(NoResults)

@@ -1,4 +1,4 @@
-from functools import wraps, partial
+from functools import wraps
 
 from ..config import settings
 from .pgpool import PostgresConnectionPool
@@ -150,7 +150,7 @@ class ConnectionProxy(object):
         c = self._conn.cursor()
         easy_query(c.execute, query, *args, **kwargs)
         if c.description is None:
-            return None
+            return c.rowcount
         return Results(c.description, c.fetchall())
 
     __call__ = query
@@ -206,7 +206,7 @@ class Database(object):
                 conn.rollback()
                 raise
             if c.description is None:
-                return None
+                return c.rowcount
             return Results(c.description, c.fetchall())
 
     def transaction(self, retries=0):

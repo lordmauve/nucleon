@@ -21,6 +21,14 @@ simple_insert = db.make_query("""
 INSERT INTO test(name) VALUES(%(name)s) RETURNING id;
 """)
 
+simple_update = db.make_query("""
+UPDATE test SET name=%(new)s WHERE name=%(old)s
+""")
+
+simple_delete = db.make_query("""
+DELETE FROM test WHERE name=%(name)s
+""")
+
 
 @db.transaction()
 def do_insert(q, name):
