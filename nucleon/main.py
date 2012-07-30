@@ -11,6 +11,7 @@ import os
 #This is required for gevent v1.0b2
 os.environ['GEVENT_RESOLVER'] = 'ares'
 
+import errno
 import gevent
 import signal
 import pwd
@@ -20,6 +21,7 @@ import logging
 import struct
 import socket as python_socket
 
+from gevent.pool import Pool
 from gevent.socket import socket as gevent_socket
 from gevent.pywsgi import WSGIServer
 
@@ -146,43 +148,46 @@ def bootstrap_gevent():
 def serve(app, access_log, error_log, host, port,
         user, group, no_daemonise, pidfile):
     """Start the server. Does not return."""
-    # create the log directory if it doesn't already exist
-    if os.path.dirname(access_log) and\
-        not os.path.exists(os.path.dirname(access_log)):
-        os.mkdir(os.path.dirname(access_log))
-
     with open(access_log, 'a+') as f:
-        # set up logging
-        level = logging.INFO
-        # TODO: get logging level from settings
+        if no_daemonise:
+            # Log to the console when not daemonised
+            error_log = None
+            level = logging.DEBUG
+        else:
+            # TODO: get logging level from settings
+            level = logging.INFO
 
+        # set up logging
         logging.basicConfig(
             filename=error_log,
             level=level,
             format="%(asctime)s [%(process)s] %(name)s.%(levelname)s: %(message)s",
-            )
+        )
 
         # setup a listener socket before dropping permissions
         try:
             listener_socket = gevent_socket()
+            # Make the address reusable
+            listener_socket.setsockopt(
+                python_socket.SOL_SOCKET, python_socket.SO_REUSEADDR, 1
+            )
             listener_socket.bind((host, port))
             listener_socket.listen(5)
-        except python_socket.error:
-            logger.exception("Can't connect to %s:%s" % (host, port))
+        except python_socket.error as e:
+            logger.error("Can't bind socket: %s", e)
             sys.exit(1)
 
         # create a WSGIServer instance using the listener socket created
         server = WSGIServer(listener_socket, app, log=f)
+        server.set_spawn(Pool())  # Make WSGIServer manage worker greenlets
         logger.info("Listening on: %s:%s" % (host, port))
+        logger.info("Configuration used: %s" % settings.environment)
 
         try:
             # daemonise and drop permissions
             if not no_daemonise:
                 logger.debug('now daemonising')
                 daemonise_nucleon(pidfile, user, group)
-
-            logger.info("Listening on: %s:%s" % (host, port))
-            logger.info("Configuration used: %s" % settings.environment)
 
             d = MultiprocessDaemon(webserver_serve, app, server)
             d.at_exit.connect(listener_socket.close)
@@ -221,12 +226,12 @@ def webserver_serve(app, server):
 
     """
     def signal_handler():
-        logger.info('Shutting down.')
+        logger.debug('Worker caught signal. Shutting down.')
         app.stop_serving(timeout=HALT_TIMEOUT)
         server.stop()
-        logger.info('Stopped.')
 
     gevent.signal(signal.SIGUSR1, signal_handler)
+    gevent.signal(signal.SIGINT, signal_handler)
     gevent.signal(signal.SIGHUP, signal_handler)
     gevent.signal(signal.SIGTERM, signal_handler)
 
@@ -237,7 +242,7 @@ def webserver_serve(app, server):
     try:
         server.serve_forever(stop_timeout=5)
     finally:
-        app.stop_serving(timeout=HALT_TIMEOUT)
+        server.close()
 
 
 class MultiprocessDaemon(object):
@@ -263,6 +268,7 @@ class MultiprocessDaemon(object):
         # gevent.signal() doesn't work - presumably because the master is
         # usually blocked in os.wait()
         signal.signal(signal.SIGUSR1, self.signal_handler)
+        signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
 
         os.setpgid(os.getpid(), 0)  # Create a process group
@@ -272,15 +278,21 @@ class MultiprocessDaemon(object):
                 self.spawn_worker()
 
             while self.workers:
-                pid, sig = os.wait()   # Block until a child dies
+                try:
+                    pid, sig = os.wait()   # Block until a child dies
+                except OSError as e:
+                    if e.errno == errno.EINTR:
+                        continue
+                    raise
                 if pid in self.workers:
                     self.workers.remove(pid)
                     if not self.keeprunning:
                         # Don't respawn if we're shutting down
                         continue
-                    logging.info("Worker process exited. Respawning.")
+                    logger.info("Worker process exited. Respawning.")
                     self.spawn_worker()
             self.at_exit.fire()
+            logger.info('Exiting.')
         except Exception:
             log_exception("Fatal exception in control process")
             sys.exit(1)
@@ -303,7 +315,7 @@ class MultiprocessDaemon(object):
             self.workers.add(pid)
             os.setpgid(pid, os.getpid())  # Add child to our process group
         else:
-            logger.info("Worker started")
+            logger.debug("Worker started.")
             try:
                 self.worker(*self.args, **self.kwargs)
             except Exception:
