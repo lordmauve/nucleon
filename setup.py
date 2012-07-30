@@ -6,7 +6,7 @@ import sys
 
 INSTALL_REQUIRES = [
         'WebOb>=1.1.1',
-        'gevent==1.0b2',  # will be installed with dependency_links
+        'gevent==1.0b3',  # will be installed with dependency_links
         'psycopg2>=2.2.1',
         'WebTest>=1.3.1',
         'puka==0.0.4vertu',
