@@ -67,6 +67,8 @@ class Settings(object):
 
         Raises ConfigurationError if the environment has already been locked.
         """
+        if environment == self._settings.get('environment'):
+            return
         if self._locked:
             raise ConfigurationError("Settings environment is locked")
 

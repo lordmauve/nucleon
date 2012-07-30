@@ -39,6 +39,14 @@ def test_change_environment():
     settings2._set_environment('test')
 
 
+def test_change_environment_noop():
+    """We can set the environment as long as it isn't a change"""
+    settings2 = Settings.for_app_file(__file__)
+    eq_(settings2.database, 'default_database')
+    settings2._set_environment('default')
+    eq_(settings2.database, 'default_database')
+
+
 def test_environment_switch():
     """Test that we can switch environment"""
     settings2 = Settings.for_app_file(__file__)
