@@ -8,6 +8,7 @@ from pwd import getpwuid
 from grp import getgrgid
 from time import sleep
 import json
+import socket
 
 from gevent.pool import Pool
 
@@ -43,8 +44,8 @@ def setup():
     if os.path.exists(pidfile):
         kill_from_pidfile(pidfile)
         os.unlink(pidfile)
-#    if os.path.exists(error_log):
-#        os.unlink(error_log)
+    if os.path.exists(error_log):
+        os.unlink(error_log)
 
 
 def teardown():
@@ -102,8 +103,9 @@ def wait_for_pidfile():
         assert total_wait < 10, "pidfile (%s) wasn't written after 10s" % pidfile
         try:
             with open(pidfile, 'r') as f:
-                if f.read().strip():
-                    break
+                pid = f.read().strip()
+                if pid:
+                    return pid
         except (IOError, OSError):
             continue
 
@@ -368,3 +370,30 @@ def test_balancing():
     eq_(results['failures'], 0)
     assert len(results['pids']) > 1
     eq_(len(results['pgrps']), 1)
+
+
+@with_setup(setup, teardown)
+def test_app_port_reusable():
+    """Test that the bound port is reusable after exiting."""
+
+    # spawn nucleon and wait a moment for app to come up
+    start_server(7010)
+
+    # Make a request to the service
+    resp = urllib2.urlopen('http://localhost:7010/status')
+    resp.read()
+    resp.close()
+
+    # Signal nucleon to stop
+    kill_daemon(wait_for_pidfile())
+
+    # Give nucleon a few seconds to stop
+    sleep(2)
+
+    s = socket.socket()
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(('0.0.0.0', 7010))
+        s.listen(5)
+    finally:
+        s.close()
