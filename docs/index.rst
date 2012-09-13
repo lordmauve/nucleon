@@ -19,6 +19,7 @@ Contents:
    configuration
    commands
    gevent
+   changelog
 
 Indices and tables
 ==================
