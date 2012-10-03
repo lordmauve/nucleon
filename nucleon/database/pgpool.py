@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from gevent.lock import Semaphore
 
 
-
 def parse_database_url(url):
     """Parse a database URL and return a dictionary.
 
@@ -28,6 +27,18 @@ def parse_database_url(url):
     return params
 
 
+def make_safe_url(params):
+    """Build a display URL from connection parameters, omitting password."""
+
+    p = params.get('port', 5432)
+    port = ':%s' % p if p != 5432 else ''
+
+    ps = params.copy()
+    ps['port'] = port
+
+    return 'postgres://{user}@{host}{port}/{database}'.format(**ps)
+
+
 class PostgresConnectionPool(object):
     """A pool of psycopg2 connections shared between multiple greenlets."""
 
@@ -40,7 +51,7 @@ class PostgresConnectionPool(object):
             db = cls(initial=initial, limit=limit, **params)
         except ConnectionFailed as e:
             raise ConnectionFailed(
-                'Failed to connect to %s' % url, *e.args[1:]
+                'Failed to connect to %s' % make_safe_url(params), *e.args
             )
         db.url = url  # record the URL for debugging
         return db
@@ -74,8 +85,9 @@ class PostgresConnectionPool(object):
         try:
             pg = psycopg2.connect(**self.settings)
         except OperationalError as e:
+            url = make_safe_url(self.settings)
             raise ConnectionFailed(
-                'Failed to connect using %r' % self.settings, *e.args
+                'Failed to connect using %s' % url, *e.args
             )
         self.size += 1
         print "PostgreSQL connection pool size:", self.size
