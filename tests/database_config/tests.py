@@ -9,6 +9,7 @@ from nose.tools import eq_
 from nucleon import tests
 from nucleon.commands import syncdb, resetdb
 from nucleon.database import PostgresConnectionPool, ConnectionFailed
+from nucleon.database.pgpool import parse_database_url, make_safe_url
 
 app = tests.get_test_app(__file__)
 
@@ -32,13 +33,27 @@ def test_db_op():
     eq_(resp.json['x^2'], 4)
 
 
+def test_make_safe_url():
+    """We can generate a URL that is safe to log/display."""
+    u = 'postgres://dave:secret@dbhost.tld/mydb'
+    params = parse_database_url(u)
+    eq_(make_safe_url(params), 'postgres://dave@dbhost.tld/mydb')
+
+
+def test_make_safe_url_with_port():
+    """We can generate a URL that is safe to log/display."""
+    u = 'postgres://dave:secret@dbhost.tld:5119/mydb'
+    params = parse_database_url(u)
+    eq_(make_safe_url(params), 'postgres://dave@dbhost.tld:5119/mydb')
+
+
 def test_invalid_connection_settings():
     """Invalid connection settings cause an appropriate error to be raised."""
     invalid_db = 'postgres://asf:123131@localhost/banaoakj'
     try:
         PostgresConnectionPool.for_url(invalid_db)
     except ConnectionFailed as e:
-        eq_(e.args[0], 'Failed to connect to %s' % invalid_db)
+        eq_(e.args[0], 'Failed to connect to postgres://asf@localhost/banaoakj')
         return
     except Exception as e:
         raise AssertionError("Exception raised was %r" % e)
@@ -101,4 +116,5 @@ def test_reinitialise_database_with_dependencies():
         test2_ids = [r[0] for r in all]
         eq_(len(test2_ids), 1)
         eq_(ids[-1], test2_ids[0])
+
 
