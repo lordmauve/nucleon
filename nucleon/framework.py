@@ -7,7 +7,6 @@ from webob import Request, Response
 
 from .database.pgpool import PostgresConnectionPool
 from .http import Http404, Http503, HttpException, JsonResponse
-from .amqp.pool import PukaDictPool
 from .util import WaitCounter
 from .config import settings, ConfigurationError
 
@@ -33,7 +32,6 @@ class Application(object):
         self._dbs = {}
         self.running_state = STATE_SERVING
         self.active_requests_counter = WaitCounter()
-        self._registered_amqp_listeners = []
 
     def view(self, pattern, **vars):
         """Decorator that binds a view function to a URL pattern.
@@ -72,81 +70,6 @@ class Application(object):
             self._dbs[name] = PostgresConnectionPool.for_url(dbstring)
             return self._dbs[name]
 
-    def get_amqp_pool(self, type="publish"):
-        """
-        Returns AMQP connections pool
-
-        It initializes the pool on first request (configuration is defined in
-        app.cfg)
-
-        Usage:
-
-        >>> conn = app.get_amqp_pool().connection()
-        ... conn.publish(...)
-
-        """
-        URL = "amqp_%s_url" % type
-        POOL = "amqp_%s_pool_size" % type
-        amqp_url = self.get_config_string(URL)
-        amqp_pool_size = int(self.get_config_string(POOL))
-        return PukaDictPool(name=type, size=amqp_pool_size, amqp_url=amqp_url,
-                            app=self)
-
-    def _register_amqp_listener(self, queue, message_callback, type='listen'):
-        """
-        Registers AMQP message_callback function as a listener on a queue
-        (synchronous, internal API)
-
-        Arguments:
-        queue :
-            AMQP queue name (remember to create one first)
-        message_callback :
-            callback function that will be executed on each receiver message
-        type :
-            name of a pool to take listener from (defaults to 'listen')
-        """
-
-        connection = self.get_amqp_pool(type=type).connection()
-        connection.consume(queue=queue, callback=message_callback)
-        self._registered_amqp_listeners.append((connection, None))
-        print "AMQP listener for queue %s" % queue
-
-    def register_and_spawn_amqp_listener(self, queue, message_callback,
-        type='listen'):
-        """
-        Registers AMQP message_callback function as a listener on a queue
-        (asynchronous)
-
-        Then it registers provided message_callback function to be executed on
-        each received message.
-        Then it spawns a listening loop for this connection as a separate
-        greenlet.
-        Listening connection created that way will be gracefully shut down on
-        nucleon exit.
-
-        Note: Remember to acknowledge the message in message_callback.
-
-        Usage:
-
-        >>> def print_message(connection,promise,message):
-        ...     print "Received message: ", message
-        ...     connection.basic_ack(message) #remember to ack the message
-        ...
-        ... app.register_and_spawn_listener(queue='listenerA',
-        ...     message_callback=print_message)
-
-
-        Arguments
-
-        :queue: AMQP queue name (remember to create one first)
-        :message_callback: callback function that will be executed on each received message given following arguments message_callback(connection, promise, message)
-        :type: name of a pool to take listener from (defaults to 'listen')
-
-        """
-        greenlet = gevent.spawn(self._register_amqp_listener, queue,
-                                message_callback, type=type)
-        self._registered_amqp_listeners.append((None, greenlet))
-
     def load_sql(self, filename):
         """Load an SQL script from filename.
 
@@ -166,10 +89,8 @@ class Application(object):
         :timeout: timeout to wait for shutdown
 
         """
-        gevent.joinall([
-            gevent.spawn(self._stop_serving_requests, timeout=timeout),
-            gevent.spawn(self._stop_serving_amqp, timeout=timeout)
-            ], timeout=timeout)
+        stop = gevent.spawn(self._stop_serving_requests, timeout=timeout)
+        stop.join(timeout=timeout)
 
     def _stop_serving_requests(self, timeout=None):
         """
@@ -182,24 +103,6 @@ class Application(object):
         """
         self.running_state = STATE_CLOSING
         self.active_requests_counter.wait_for_zero(timeout)
-
-    def _stop_serving_amqp(self, timeout=None):
-        """
-        Stops listening for incoming AMQP messages and waits for all listening
-        loops to finish.
-
-        Arguments
-
-        :timeout: timeout to wait for shutdown
-
-        """
-        greenlets = []
-        for (connection, greenlet) in self._registered_amqp_listeners:
-            if connection is not None:
-                connection.close()
-            if greenlet is not None:
-                greenlets.append(greenlet)
-        gevent.joinall(greenlets, timeout=timeout)
 
     def __call__(self, environ, start_response):
         req = Request(environ)
