@@ -1,15 +1,12 @@
 from setuptools import setup, find_packages
 
-from nucleon import __version__
-
 import sys
 
 INSTALL_REQUIRES = [
         'WebOb>=1.1.1',
         'gevent==1.0b4',  # will be installed with dependency_links
         'psycopg2>=2.2.1',
-        'WebTest>=1.3.1',
-        'puka==0.0.4vertu',
+        'WebTest>=1.3.1'
     ]
 if sys.version_info < (2, 7):
     INSTALL_REQUIRES += [
@@ -19,11 +16,12 @@ if sys.version_info < (2, 7):
 
 setup(
     name="nucleon",
-    version=__version__,
+    version='0.1',
     url='https://docs.vertulabs.co.uk/nucleon/',
     author='Vertu Infrastructure Development Team',
     author_email='ops@vertulabs.co.uk',
     packages=find_packages(),
+    namespace_packages=['nucleon'],
     entry_points={
         'console_scripts': [
             'nucleon = nucleon.commands:main',
@@ -35,6 +33,5 @@ setup(
     install_requires=INSTALL_REQUIRES,
     dependency_links=[
         'http://code.google.com/p/gevent/downloads/list',
-        'https://github.com/lordmauve/puka/downloads'
     ]
 )

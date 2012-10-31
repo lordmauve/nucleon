@@ -224,12 +224,17 @@ for command, command_class in COMMANDS.iteritems():
 
 def main():
     """Entry point for the nucleon commandline."""
-    from nucleon import __version__
     import argparse
+
+    try:
+        import pkg_resources
+        version = pkg_resources.get_distribution('nucleon').version
+    except (ImportError, pkg_resources.DistributionNotFound):
+        version = 'version unknown'
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', action='version',
-                        version='%(prog)s ' + __version__)
+                        version='%(prog)s ' + version)
     subparsers = parser.add_subparsers(metavar='command')
     # let's register all specified COMMANDS
     for (name, command_class) in COMMANDS.iteritems():

@@ -15,7 +15,6 @@ Contents:
    framework
    database
    signals
-   amqp
    configuration
    commands
    gevent

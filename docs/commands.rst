@@ -36,9 +36,9 @@ re-created.
 
 Graceful Application Exit
 -------------------------
+
 To close nucleon app in production environment please send it a SIGUSR1 message.
 Within 10 seconds timeout (default timeout) nucleon will:
 
 #. Stop serving new pages. All requests during shutdown will be handled with 503 response.
 #. Wait for existing requests to complete.
-#. Stop receiving new messages if amqp listening loop is configured.

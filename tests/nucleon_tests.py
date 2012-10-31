@@ -31,6 +31,7 @@ def unload_nucleon():
     for k in sys.modules.keys():
         if k.split('.')[0] == 'nucleon':
             del(sys.modules[k])
+    del(sys.modules['pkg_resources'])
 
 
 #Get a list of all the elements in the current directory

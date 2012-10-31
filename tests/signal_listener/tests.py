@@ -54,7 +54,7 @@ BASE_URL = 'http://localhost:%d/' % SERVER_PORT
 
 class SubNucleon(object):
     """
-    Abstraction over Nucleon http/amqp server to start, kill, join it.
+    Abstraction over Nucleon server to start, kill, join it.
 
     Considered base APIs:
     - Subprocess was also nice but it required to provide hardcoded path to
