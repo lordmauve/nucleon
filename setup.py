@@ -33,5 +33,13 @@ setup(
     install_requires=INSTALL_REQUIRES,
     dependency_links=[
         'http://code.google.com/p/gevent/downloads/list',
+    ],
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Developers',
+        'Operating System :: POSIX',
+        'Programming Language :: Python :: 2',
+        'License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)',
+        'Topic :: Software Development :: Libraries :: Python Modules'
     ]
 )
