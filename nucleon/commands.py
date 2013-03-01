@@ -20,6 +20,7 @@ class Command(object):
         'port': 8888,
         'access_log': 'access.log',
         'error_log': 'error.log',
+        'processes': 4,
         'no_daemonise': False,
         'pidfile': None,
     }
@@ -132,6 +133,10 @@ class StartCommand(AppCommand):
             default=self.DEFAULTS['pidfile'],
             help='use the filename supplied to store the PID'
                 ' (default: %(default)s)')
+        parser.add_argument('-j', '--processes', type=int,
+            default=self.DEFAULTS['processes'],
+            help='Number of server processes to run'
+                ' (default: %(default)s)')
         parser.add_argument('--no_daemonise',
             default=self.DEFAULTS['no_daemonise'], action="store_true",
             help="do not daemonise the nucleon app (default: %(default)s)")
@@ -152,6 +157,7 @@ class StartCommand(AppCommand):
         port = param('port')
         user = param('user')
         group = param('group')
+        processes = param('processes')
         pidfile = param('pidfile')
         no_daemonise = param('no_daemonise')
 
@@ -160,7 +166,7 @@ class StartCommand(AppCommand):
         # Start the nucleon app with teh specified parameters
         serve(app, access_log=access_log, error_log=error_log,
             host=host, port=port, user=user, group=group,
-            no_daemonise=no_daemonise, pidfile=pidfile)
+            no_daemonise=no_daemonise, pidfile=pidfile, processes=processes)
 
 
 class SyncdbCommand(AppCommand):

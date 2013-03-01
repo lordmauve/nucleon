@@ -16,7 +16,7 @@ if sys.version_info < (2, 7):
 
 setup(
     name="nucleon",
-    version='0.1',
+    version='0.1.1',
     description="A gevent-based microframework for building RESTful web services that provide AMQP interfaces.",
     long_description=open('README.rst').read(),
     url='https://docs.vertulabs.co.uk/nucleon/',
