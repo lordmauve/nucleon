@@ -149,7 +149,7 @@ def bootstrap_gevent():
 
 
 def serve(app, access_log, error_log, host, port,
-        user, group, no_daemonise, pidfile):
+        user, group, no_daemonise, pidfile, processes=4):
     """Start the server. Does not return."""
     with open(access_log, 'a+') as access_file:
         if no_daemonise:
@@ -191,7 +191,7 @@ def serve(app, access_log, error_log, host, port,
 
             d = MultiprocessDaemon(webserver_serve, access_file, app, listener_socket)
             d.at_exit.connect(listener_socket.close)
-            d.start()
+            d.start(processes)
         finally:
             sys.exit(0)
 
